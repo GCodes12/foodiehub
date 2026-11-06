@@ -1,0 +1,74 @@
+# ------------------------------------------------------------------
+# FoodieHub .gitignore
+# Never ignored on purpose: source code, docs/, Maven Wrapper files
+# (mvnw, mvnw.cmd, .mvn/wrapper/), package lockfiles, .env.example
+# and other configuration templates.
+# ------------------------------------------------------------------
+
+# --- macOS ---
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.fseventsd
+
+# --- Local secrets and environment files ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+# --- Java / Maven ---
+target/
+*.class
+hs_err_pid*
+replay_pid*
+.flattened-pom.xml
+dependency-reduced-pom.xml
+
+# --- Node / Vite ---
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+.npm/
+.eslintcache
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Test and quality reports (generated) ---
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.scannerwork/
+
+# --- Logs ---
+*.log
+logs/
+
+# --- IDEs and editors ---
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+.vscode/*
+!.vscode/extensions.json
+.classpath
+.project
+.settings/
+.factorypath
+*.swp
+*.swo
+*~

@@ -1,0 +1,40 @@
+# Local development infrastructure (DEC-004: local development and portfolio demos only).
+# Usage: cp .env.example .env  (then set passwords)  &&  docker compose up -d mysql
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: foodiehub-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      RESTAURANT_DB_MIGRATOR_PASSWORD: ${RESTAURANT_DB_MIGRATOR_PASSWORD:?set RESTAURANT_DB_MIGRATOR_PASSWORD in .env}
+      RESTAURANT_DB_APP_PASSWORD: ${RESTAURANT_DB_APP_PASSWORD:?set RESTAURANT_DB_APP_PASSWORD in .env}
+      ORDER_DB_MIGRATOR_PASSWORD: ${ORDER_DB_MIGRATOR_PASSWORD:?set ORDER_DB_MIGRATOR_PASSWORD in .env}
+      ORDER_DB_APP_PASSWORD: ${ORDER_DB_APP_PASSWORD:?set ORDER_DB_APP_PASSWORD in .env}
+    ports:
+      # Bound to localhost only.
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Optional alternative to the local Keycloak install. Start with: docker compose --profile keycloak up -d keycloak
+  keycloak:
+    profiles: ["keycloak"]
+    image: quay.io/keycloak/keycloak:26.8.1
+    container_name: foodiehub-keycloak
+    command: ["start-dev", "--import-realm", "--hostname=http://localhost:8080"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:?set KEYCLOAK_ADMIN_USER in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./infra/keycloak/foodiehub-realm.json:/opt/keycloak/data/import/foodiehub-realm.json:ro
+
+volumes:
+  mysql-data:

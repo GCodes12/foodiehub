@@ -1,0 +1,24 @@
+# Local development / portfolio demo profile (DEC-004). Not a production configuration.
+#
+# Every value comes from environment variables, which may be supplied by the git-ignored .env file at the
+# repository root (copy .env.example). Real OS environment variables take precedence over .env.
+# Nothing secret is stored here: the two passwords have no default. If they are not found, Spring Boot passes
+# the literal text "${...}" as the password and MySQL reports "Access denied ... (using password: YES)".
+spring:
+  config:
+    # .env is looked up relative to the working directory, which may be services/restaurant-service
+    # (Maven Wrapper, IntelliJ module directory) or the repository root. Both are optional; the later
+    # entry wins, so a .env in the working directory itself always takes precedence.
+    import:
+      - optional:file:../../.env[.properties]
+      - optional:file:.env[.properties]
+  datasource:
+    url: ${RESTAURANT_DB_URL:jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/restaurant_db}
+    # Runtime user: SELECT only on restaurant_db (the service is read-only in VS-1).
+    username: ${RESTAURANT_DB_APP_USER:restaurant_app}
+    password: ${RESTAURANT_DB_APP_PASSWORD}
+  flyway:
+    # Migrations (schema + dev seed) run as a separate DDL user; Hibernate never changes the schema.
+    user: ${RESTAURANT_DB_MIGRATOR_USER:restaurant_migrator}
+    password: ${RESTAURANT_DB_MIGRATOR_PASSWORD}
+    locations: classpath:db/migration,classpath:db/seed

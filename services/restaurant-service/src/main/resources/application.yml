@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: restaurant-service
+  jpa:
+    open-in-view: false
+    hibernate:
+      # The schema is owned by Flyway migrations; Hibernate never changes it.
+      ddl-auto: none
+  flyway:
+    # Schema only. Demo seed data is added by the dev profile (application-dev.yml).
+    locations: classpath:db/migration
+
+server:
+  port: ${RESTAURANT_SERVICE_PORT:8081}
+  error:
+    include-message: never
+    include-stacktrace: never
