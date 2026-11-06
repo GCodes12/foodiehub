@@ -271,9 +271,14 @@
       "PICKUP": "Pickup"
     },
     "statuses": {
-      "PENDING_PAYMENT": "Pending payment"
+      "PENDING_PAYMENT": "Waiting for the restaurant",
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Rejected",
+      "PREPARING": "Preparing",
+      "READY_FOR_PICKUP": "Ready for pickup",
+      "PICKED_UP": "Picked up"
     },
-    "paymentNote": "Online payment isn't available yet, so this order has not been paid.",
+    "paymentNote": "Nothing has been charged. Once the restaurant accepts your order, you pay at the counter.",
     "items": "Items",
     "colItem": "Dish",
     "colQty": "Qty",
@@ -283,7 +288,23 @@
     "total": "Total",
     "pricesNote": "Prices confirmed by the restaurant when the order was placed.",
     "backToOrders": "All my orders",
-    "orderMore": "Order something else"
+    "orderMore": "Order something else",
+    "tracker": {
+      "PENDING_PAYMENT": "Order placed",
+      "ACCEPTED": "Accepted",
+      "PREPARING": "Preparing",
+      "READY_FOR_PICKUP": "Ready for pickup",
+      "PICKED_UP": "Picked up"
+    },
+    "trackerLabel": "Order progress",
+    "rejectReasons": {
+      "SOLD_OUT": "An item in your order is sold out.",
+      "TOO_BUSY": "The kitchen is too busy right now.",
+      "CLOSING": "The kitchen is closing."
+    },
+    "rejectedTitle": "The restaurant couldn't accept this order",
+    "rejectedText": "Your order was not accepted. Nothing was charged.",
+    "payAtCounter": "Pay at the counter when you collect your order."
   },
   "story": {
     "metaTitle": "Our story",
@@ -348,7 +369,9 @@
     "FORBIDDEN": "Your account isn't allowed to do this.",
     "OWNER_DATA_UNAVAILABLE": "Your restaurants couldn't be loaded right now. Please try again.",
     "MENU_ITEM_NOT_FOUND": "This dish isn't on your menu.",
-    "NOTHING_TO_UPDATE": "Nothing was changed."
+    "NOTHING_TO_UPDATE": "Nothing was changed.",
+    "INVALID_TRANSITION": "This order can't move to that step from where it is now.",
+    "ORDER_CHANGED": "This order was updated in the meantime. The list now shows its current status."
   },
   "kitchen": {
     "metaTitle": "Kitchen dashboard",
@@ -382,13 +405,44 @@
       "pricePositive": "The price must be more than ₹0.",
       "descriptionLength": "Keep the description under {max} characters."
     },
-    "autoRefresh": "New orders appear automatically every 30 seconds.",
+    "autoRefresh": "Updates every 20 seconds.",
     "refresh": "Refresh",
     "ordersToday": "Orders today",
     "valueToday": "Value today",
-    "ordersAll": "All orders",
     "noOrdersTitle": "No orders yet",
     "noOrdersText": "New orders for your restaurant will appear here.",
-    "statusNote": "Orders are shown as placed. Accepting, preparing and marking orders ready isn't available yet."
+    "waiting": "Waiting for you",
+    "payAtCounter": "Pay at counter",
+    "views": {
+      "active_one": "Active ({count})",
+      "active_other": "Active ({count})",
+      "history_one": "History ({count})",
+      "history_other": "History ({count})"
+    },
+    "noHistoryTitle": "No finished orders yet",
+    "noHistoryText": "Picked-up and rejected orders appear here.",
+    "actions": {
+      "accept": "Accept",
+      "reject": "Reject",
+      "PREPARING": "Start preparing",
+      "READY_FOR_PICKUP": "Mark ready",
+      "PICKED_UP": "Picked up"
+    },
+    "moved": {
+      "ACCEPTED": "Order {id} accepted",
+      "REJECTED": "Order {id} rejected",
+      "PREPARING": "Order {id} is being prepared",
+      "READY_FOR_PICKUP": "Order {id} is ready for pickup",
+      "PICKED_UP": "Order {id} picked up"
+    },
+    "rejectedBecause": "Reason: {reason}",
+    "reject": {
+      "title": "Reject order {id}?",
+      "text": "The customer will see that the restaurant couldn't accept the order. This can't be undone.",
+      "reasonLabel": "Reason shown to the customer",
+      "noReason": "No reason",
+      "keep": "Keep order",
+      "confirm": "Reject order"
+    }
   }
 }

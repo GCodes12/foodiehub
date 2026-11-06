@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -88,6 +89,7 @@ class OrderApiIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        jdbc.update("DELETE FROM order_status_change");
         jdbc.update("DELETE FROM order_item");
         jdbc.update("DELETE FROM customer_order");
         given(restaurantMenuClient.fetchMenu(RID)).willReturn(menu("Masala Dosa"));
@@ -486,6 +488,92 @@ class OrderApiIntegrationTest {
         mvc.perform(get("/api/v1/owner/orders").with(jwt().authorities(OWNER)))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.code").value("OWNER_DATA_UNAVAILABLE"));
+    }
+
+    // --- Order lifecycle (DEC-016) -----------------------------------------------------------------------------
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder move(String orderId, String from,
+            String to, String reason) {
+        String body = "{\"from\":\"" + from + "\",\"status\":\"" + to + "\"" + (reason == null ? "" : ",\"reason\":\"" + reason + "\"") + "}";
+        return patch("/api/v1/owner/orders/{id}/status", orderId).contentType(MediaType.APPLICATION_JSON).content(body)
+                .with(jwt().jwt(j -> j.subject("sub-owner").claim("preferred_username", "owner")).authorities(OWNER));
+    }
+
+    @Test
+    void anOwnerTakesAnOrderFromAcceptedToPickedUpAndTheCustomerSeesEveryStep() throws Exception {
+        String id = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of(RID));
+
+        String[][] steps = {{"PENDING_PAYMENT", "ACCEPTED"}, {"ACCEPTED", "PREPARING"}, {"PREPARING", "READY_FOR_PICKUP"},
+                {"READY_FOR_PICKUP", "PICKED_UP"}};
+        for (String[] step : steps) {
+            mvc.perform(move(id, step[0], step[1], null))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value(step[1]))
+                    .andExpect(jsonPath("$.total").value(508.00));
+            mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
+                    .andExpect(jsonPath("$.status").value(step[1]))
+                    .andExpect(jsonPath("$.statusUpdatedAt").exists());
+        }
+        mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(jsonPath("$.history.length()").value(4))
+                .andExpect(jsonPath("$.history[0].status").value("ACCEPTED"))
+                .andExpect(jsonPath("$.history[3].status").value("PICKED_UP"))
+                .andExpect(jsonPath("$.history[0].changedBy").doesNotExist());
+        assertThat(jdbc.queryForList("SELECT changed_by FROM order_status_change WHERE order_id = ?", String.class, id))
+                .containsOnly("owner").hasSize(4);
+        mvc.perform(get("/api/v1/orders").with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(jsonPath("$[0].status").value("PICKED_UP"))
+                .andExpect(jsonPath("$[0].history").doesNotExist());
+    }
+
+    @Test
+    void anOwnerCanRejectWithAReasonThatTheCustomerSees() throws Exception {
+        String id = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of(RID));
+        mvc.perform(move(id, "PENDING_PAYMENT", "REJECTED", "SOLD_OUT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.rejectReason").value("SOLD_OUT"));
+        mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(jsonPath("$.rejectReason").value("SOLD_OUT"))
+                .andExpect(jsonPath("$.history[0].reason").value("SOLD_OUT"));
+        // Final: nothing moves a rejected order.
+        mvc.perform(move(id, "REJECTED", "ACCEPTED", null))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_TRANSITION"));
+    }
+
+    @Test
+    void refusesSkippedSteps_reasonsOutsideARejection_andStaleScreens() throws Exception {
+        String id = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of(RID));
+
+        mvc.perform(move(id, "PENDING_PAYMENT", "READY_FOR_PICKUP", null))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("INVALID_TRANSITION"));
+        mvc.perform(move(id, "PENDING_PAYMENT", "ACCEPTED", "SOLD_OUT"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("INVALID_TRANSITION"));
+        mvc.perform(move(id, "ACCEPTED", "PREPARING", null)) // the screen thinks it was accepted; it was not
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ORDER_CHANGED"));
+        mvc.perform(move(id, "PENDING_PAYMENT", "SHIPPED", null))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+        mvc.perform(move(id, "PENDING_PAYMENT", "ACCEPTED", null)).andExpect(status().isOk());
+        mvc.perform(move(id, "PENDING_PAYMENT", "ACCEPTED", null)) // a double click: second one is stale
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ORDER_CHANGED"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM order_status_change WHERE order_id = ?", Integer.class, id)).isEqualTo(1);
+    }
+
+    @Test
+    void onlyTheOwnerOfTheOrdersRestaurantCanChangeIt() throws Exception {
+        String id = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of("another-restaurant"));
+        mvc.perform(move(id, "PENDING_PAYMENT", "ACCEPTED", null))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+        mvc.perform(patch("/api/v1/owner/orders/{id}/status", id).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"from\":\"PENDING_PAYMENT\",\"status\":\"ACCEPTED\"}").with(jwt().authorities(CUSTOMER)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"));
     }
 }
 

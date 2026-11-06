@@ -1,20 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { ClipboardList, RefreshCw, Search, Store, UtensilsCrossed } from 'lucide-react';
 import { EmptyState } from '../components/common/EmptyState.tsx';
 import { ErrorMessage } from '../components/common/ErrorMessage.tsx';
+import { Modal } from '../components/common/Modal.tsx';
 import { Skeleton } from '../components/common/Skeleton.tsx';
 import { useToast } from '../components/common/Toast.tsx';
 import { DishEditor } from '../components/owner/DishEditor.tsx';
 import { OwnerOrderList } from '../components/owner/OwnerOrderList.tsx';
+import type { OrderActions } from '../components/owner/OwnerOrderList.tsx';
 import { invalidateMenu } from '../hooks/useMenu.ts';
 import { usePageMeta } from '../hooks/usePageMeta.ts';
+import { usePolling } from '../hooks/usePolling.ts';
+import { ApiError } from '../services/api.ts';
 import { api } from '../services/client.ts';
-import type { MenuItem, MenuItemChanges, Order, OwnedRestaurant } from '../types/api.ts';
+import type { MenuItem, MenuItemChanges, Order, OrderStatus, OwnedRestaurant, RejectReason } from '../types/api.ts';
 import { t } from '../utils/i18n.ts';
 import { categoryName, groupByCategory, matchesQuery } from '../utils/menu.ts';
+import { REJECT_REASONS, splitOrders } from '../utils/orderStatus.ts';
 
-const REFRESH_MS = 30_000;
+const REFRESH_MS = 20_000;
 
 /** Owner dashboard (DEC-015, RESTAURANT_OWNER only): the restaurant's menu and its incoming orders. */
 export function KitchenPage() {
@@ -144,7 +149,12 @@ function MenuTab({ restaurant }: { restaurant: OwnedRestaurant }) {
 function OrdersTab() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<Order | null>(null);
+  const [view, setView] = useState<'active' | 'history'>('active');
+  const toast = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,21 +170,89 @@ function OrdersTab() {
 
   useEffect(() => {
     void load();
-    const timer = window.setInterval(() => void load(), REFRESH_MS);
-    return () => window.clearInterval(timer);
   }, [load]);
+  usePolling(() => void load(), REFRESH_MS, true);
+
+  async function move(order: Order, to: OrderStatus, reason?: RejectReason) {
+    setBusyId(order.id);
+    setActionError(null);
+    try {
+      const updated = await api.updateOrderStatus(order.id, { from: order.status as OrderStatus, status: to, reason });
+      setOrders((list) => list?.map((o) => (o.id === updated.id ? { ...updated, history: undefined } : o)) ?? null);
+      toast(t(`kitchen.moved.${to}`, { id: order.id.slice(0, 8).toUpperCase() }));
+    } catch (e) {
+      setActionError(e);
+      if (e instanceof ApiError && e.status === 409) {
+        void load(); // someone else (or another tab) changed it: show the current state
+      }
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const { active, history } = splitOrders(orders ?? []);
+  const actions: OrderActions = {
+    onAccept: (order) => void move(order, 'ACCEPTED'),
+    onReject: (order) => setRejecting(order),
+    onAdvance: (order, to) => void move(order, to),
+    busyId,
+  };
 
   return (
     <>
       <div className="owner-toolbar">
-        <p className="muted small">{t('kitchen.autoRefresh')}</p>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={15} aria-hidden="true" className={loading ? 'spin' : undefined} /> {t('kitchen.refresh')}
-        </button>
+        <div className="segmented" role="tablist" aria-label={t('kitchen.tabs.orders')}>
+          {(['active', 'history'] as const).map((name) => (
+            <button key={name} type="button" role="tab" aria-selected={view === name}
+              className={`segment${view === name ? ' is-active' : ''}`} onClick={() => setView(name)}>
+              {t(`kitchen.views.${name}`, { count: (name === 'active' ? active : history).length })}
+            </button>
+          ))}
+        </div>
+        <div className="owner-toolbar-right">
+          <span className="muted small">{t('kitchen.autoRefresh')}</span>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => void load()} disabled={loading}>
+            <RefreshCw size={15} aria-hidden="true" className={loading ? 'spin' : undefined} /> {t('kitchen.refresh')}
+          </button>
+        </div>
       </div>
       {error !== null && <ErrorMessage error={error} onRetry={() => void load()} />}
+      {actionError !== null && <ErrorMessage error={actionError} />}
       {orders === null && error === null && <div className="owner-orders">{[0, 1].map((i) => <Skeleton key={i} className="skeleton-row" />)}</div>}
-      {orders && <OwnerOrderList orders={orders} />}
+      {orders && (view === 'active'
+        ? <OwnerOrderList orders={active} allOrders={orders} actions={actions} />
+        : <OwnerOrderList orders={history} allOrders={orders} emptyTitle={t('kitchen.noHistoryTitle')} emptyText={t('kitchen.noHistoryText')} />)}
+      <RejectDialog order={rejecting} onCancel={() => setRejecting(null)}
+        onConfirm={(reason) => { const order = rejecting; setRejecting(null); if (order) void move(order, 'REJECTED', reason); }} />
     </>
+  );
+}
+
+/** Asks for an optional reason before rejecting (DEC-016); the customer sees the reason. */
+function RejectDialog({ order, onCancel, onConfirm }: {
+  order: Order | null; onCancel: () => void; onConfirm: (reason?: RejectReason) => void;
+}) {
+  const titleId = useId();
+  const [reason, setReason] = useState<RejectReason | ''>('');
+  return (
+    <Modal open={order !== null} onClose={onCancel} labelledBy={titleId} className="confirm">
+      <h2 id={titleId} className="confirm-title">{t('kitchen.reject.title', { id: order?.id.slice(0, 8).toUpperCase() ?? '' })}</h2>
+      <p className="confirm-text">{t('kitchen.reject.text')}</p>
+      <fieldset className="reason-options">
+        <legend className="field-label">{t('kitchen.reject.reasonLabel')}</legend>
+        {(['', ...REJECT_REASONS] as const).map((value) => (
+          <label key={value || 'none'} className="check">
+            <input type="radio" name="reject-reason" value={value} checked={reason === value} onChange={() => setReason(value)} />
+            {value ? t(`order.rejectReasons.${value}`) : t('kitchen.reject.noReason')}
+          </label>
+        ))}
+      </fieldset>
+      <div className="confirm-actions">
+        <button type="button" className="btn btn-secondary" onClick={onCancel} autoFocus>{t('kitchen.reject.keep')}</button>
+        <button type="button" className="btn btn-danger" onClick={() => { onConfirm(reason || undefined); setReason(''); }}>
+          {t('kitchen.reject.confirm')}
+        </button>
+      </div>
+    </Modal>
   );
 }

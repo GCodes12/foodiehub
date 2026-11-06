@@ -54,6 +54,28 @@ export interface Order {
   subtotal: number;
   total: number;
   createdAt: string;
+  /** When the status last changed (DEC-016); null/absent while the order is still as placed. */
+  statusUpdatedAt?: string | null;
+  /** SOLD_OUT, TOO_BUSY or CLOSING when the owner gave a reason for rejecting. */
+  rejectReason?: string | null;
+  /** Status changes, oldest first: only on a single order (GET /orders/{id}). */
+  history?: StatusStep[];
+}
+
+export interface StatusStep {
+  status: string;
+  at: string;
+  reason?: string | null;
+}
+
+export type OrderStatus = 'PENDING_PAYMENT' | 'ACCEPTED' | 'REJECTED' | 'PREPARING' | 'READY_FOR_PICKUP' | 'PICKED_UP';
+export type RejectReason = 'SOLD_OUT' | 'TOO_BUSY' | 'CLOSING';
+
+export interface StatusChangeRequest {
+  /** The status the owner's screen shows; the server refuses the change if the order has moved on (409). */
+  from: OrderStatus;
+  status: OrderStatus;
+  reason?: RejectReason;
 }
 
 export interface FieldError {

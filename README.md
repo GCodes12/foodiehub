@@ -324,12 +324,19 @@ details. Browsing is public; **Checkout** and **My Orders** ask you to log in (u
 | User | Role | Can |
 |---|---|---|
 | `alice`, `bob` | `CUSTOMER` | browse, order (only customers may order: Q-23), see their own orders |
-| `owner` | `RESTAURANT_OWNER` | **Kitchen** dashboard (`/kitchen`): mark dishes available / sold out, edit price, description and labels; see incoming orders for ZAYORA (refreshes every 30 s). Cannot order (403). |
+| `owner` | `RESTAURANT_OWNER` | **Kitchen** dashboard (`/kitchen`): mark dishes available / sold out, edit price, description and labels; **manage orders**: accept or reject (optional reason), start preparing, mark ready, picked up; Active and History lists (refresh every 20 s). Cannot order (403). |
 
 The owner is linked to ZAYORA in `restaurant_db.restaurant_owner` (dev seed). Owner API: `GET /api/v1/owner/restaurants`,
 `GET /api/v1/owner/restaurants/{id}/menu`, `PATCH /api/v1/owner/restaurants/{id}/menu-items/{itemId}` (Restaurant Service,
 token audience `restaurant-service`) and `GET /api/v1/owner/orders` (Order Service). Not built yet: order status
-changes (accept / prepare / ready), adding or removing dishes, admin.
+changes beyond the flow below, adding or removing dishes, admin.
+
+**Order lifecycle (DEC-016):** `PENDING_PAYMENT → ACCEPTED | REJECTED`, then `PREPARING → READY_FOR_PICKUP →
+PICKED_UP`. An accepted order is **paid at the counter** (no online payment). Owners change status with
+`PATCH /api/v1/owner/orders/{id}/status` and a body `{"from":"<status on screen>","status":"<next>","reason":"SOLD_OUT|TOO_BUSY|CLOSING"}`
+(reason only when rejecting). A skipped step or a stale screen (`from` no longer current) gets **409**; every change
+is recorded in `order_db.order_status_change`. Customers see the progress tracker on the order page and status in
+My Orders, refreshed every 20 s while the order is in progress.
 
 - Port **5173 is required**: Keycloak only accepts sign-in redirects to `http://localhost:5173`.
 - The dev server forwards `/api/v1/restaurants` to port 8081 and `/api/v1/orders` to port 8082 (`vite.config.ts`;

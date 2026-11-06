@@ -1,6 +1,6 @@
 # FoodieHub — Clarification Log
 
-> **Status: PARTLY ANSWERED.** Owner decisions **DEC-001 – DEC-015** are recorded in §9.2. Everything
+> **Status: PARTLY ANSWERED.** Owner decisions **DEC-001 – DEC-016** are recorded in §9.2. Everything
 > not covered by those decisions remains open. Recommended defaults (§9.1) take effect only when the owner records an
 > answer in §9.2.
 >
@@ -11,7 +11,7 @@
 used exactly as in `raw-requirement.md`. Questions Q-01 – Q-16 are defined there and referenced here. New questions
 continue the same series from **Q-17**. The proposed slice is called **VS-1**, its checkpoints **CP-1 – CP-5**, its draft
 acceptance criteria **VS1-AC1 – VS1-AC9**, the conflicts found here **CC-1 – CC-6**, and the owner decisions
-**DEC-001 – DEC-015** (§9.2). These are distinct from the `raw-requirement.md` findings C-01 – C-17.
+**DEC-001 – DEC-016** (§9.2). These are distinct from the `raw-requirement.md` findings C-01 – C-17.
 
 ---
 
@@ -513,6 +513,26 @@ caller owns, forwarding the caller's token.
 
 **Not decided by DEC-015:** order status transitions (accept / reject / ready), adding or removing dishes, admin
 (US-09), price-change rules or history, notifications.
+
+#### DEC-016 — Order lifecycle for pickup orders (US-07) (2026-11-06)
+The owner proposed the milestone ("Owner accepts or rejects an incoming order. Accepted → Preparing. Preparing → Ready
+for Pickup. Customer sees status updates in My Orders. Owner can view and manage order history.") and answered "yes"
+to the three recommendations presented with it (assistant wording, quoted):
+
+1. "Should an owner be able to accept it anyway, meaning **pay at the counter on pickup**?" — **yes**: an unpaid
+   (`PENDING_PAYMENT`) order can be accepted; payment happens at the counter. Nothing is recorded as paid.
+2. "Add a final **Picked up** step" — **yes**.
+3. "An optional reason from a short fixed list" shown to the customer — **yes**.
+
+**Flow:** `PENDING_PAYMENT → ACCEPTED | REJECTED`, `ACCEPTED → PREPARING`, `PREPARING → READY_FOR_PICKUP`,
+`READY_FOR_PICKUP → PICKED_UP`. `REJECTED` and `PICKED_UP` are final. Only the owner of the order's restaurant changes
+status (DEC-015); the order total never changes.
+
+**Implementation choices, not owner-approved (proposals):** reasons `SOLD_OUT`, `TOO_BUSY`, `CLOSING` (rejection
+only); a status-history table (who, when, from, to, reason); an invalid move or a stale screen (the request names the
+expected current status) is refused with 409; customers see updates by polling (no push notifications).
+
+**Not decided by DEC-016:** customer cancellation, timeouts or automatic expiry, payment, refunds, notifications.
 ---
 
 ## 10. Decisions needed next

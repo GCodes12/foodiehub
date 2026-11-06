@@ -7,11 +7,13 @@ import { Skeleton } from '../components/common/Skeleton.tsx';
 import { useToast } from '../components/common/Toast.tsx';
 import { OrderDetails } from '../components/order/OrderDetails.tsx';
 import { useMenu } from '../hooks/useMenu.ts';
+import { usePolling } from '../hooks/usePolling.ts';
 import { usePageMeta } from '../hooks/usePageMeta.ts';
 import { ApiError } from '../services/api.ts';
 import { api } from '../services/client.ts';
 import type { Order } from '../types/api.ts';
 import { t } from '../utils/i18n.ts';
+import { isActive } from '../utils/orderStatus.ts';
 import { paths } from '../utils/paths.ts';
 
 /** Order confirmation (?placed=1) and order details, from GET /api/v1/orders/{id} (owner only). */
@@ -41,6 +43,11 @@ export function OrderPage() {
       active = false;
     };
   }, [orderId, attempt]);
+
+  // Live status (DEC-016): re-check while the order is still in progress.
+  usePolling(() => {
+    api.getOrder(orderId).then(setOrder, () => {});
+  }, 20_000, order !== null && isActive(order.status));
 
   const artwork = useMemo(() => new Map(menu.status === 'ready'
     ? menu.data.items.map((i) => [i.id, { imageKey: i.imageKey, category: i.category }] as const) : []), [menu]);

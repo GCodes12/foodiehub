@@ -89,6 +89,9 @@ class JwtValidationTest {
     @MockitoBean
     OrderService orderService;
 
+    @MockitoBean
+    com.foodiehub.order.order.OrderLifecycle lifecycle;
+
     // --- The positive control: without it, the 401 cases below would prove nothing ----------------------------
 
     @Test

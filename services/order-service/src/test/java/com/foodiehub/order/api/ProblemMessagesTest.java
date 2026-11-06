@@ -55,6 +55,9 @@ class ProblemMessagesTest {
     @MockitoBean
     OrderService orderService;
 
+    @MockitoBean
+    com.foodiehub.order.order.OrderLifecycle lifecycle;
+
     private static MockHttpServletRequestBuilder create(String body) {
         return post("/api/v1/orders").with(jwt().jwt(j -> j.subject("alice"))
                         .authorities(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_CUSTOMER")))

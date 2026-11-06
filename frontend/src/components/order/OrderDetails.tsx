@@ -1,9 +1,11 @@
 import { useState } from 'react';
-import { CircleCheck, Clock, Copy, Receipt, Store, Wallet } from 'lucide-react';
+import { CircleCheck, CircleX, Clock, Copy, Receipt, Store, Wallet } from 'lucide-react';
 import type { Order } from '../../types/api.ts';
 import { hasMessage, t } from '../../utils/i18n.ts';
 import { formatRupees } from '../../utils/money.ts';
 import { DishImage } from '../common/DishImage.tsx';
+import { StatusBadge } from '../common/StatusBadge.tsx';
+import { OrderTracker } from './OrderTracker.tsx';
 
 interface Props {
   order: Order;
@@ -37,15 +39,28 @@ export function OrderDetails({ order, restaurantName, artwork, onCopy }: Props) 
           </span>
         </div>
         <dl className="order-facts">
-          <div><dt>{t('order.status')}</dt><dd><span className="badge badge-warning">{label('statuses', order.status)}</span></dd></div>
+          <div><dt>{t('order.status')}</dt><dd><StatusBadge status={order.status} /></dd></div>
           {restaurantName && <div><dt>{t('order.restaurant')}</dt><dd><Store size={15} aria-hidden="true" /> {restaurantName}</dd></div>}
           <div><dt>{t('order.fulfilment')}</dt><dd>{label('fulfilmentTypes', order.fulfilmentType)}</dd></div>
           <div><dt><Clock size={15} aria-hidden="true" /></dt><dd>{t('order.placedAt', {
             date: new Date(order.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }),
           })}</dd></div>
         </dl>
-        {order.status === 'PENDING_PAYMENT' && (
-          <p className="order-payment-note"><Wallet size={16} aria-hidden="true" /> {t('order.paymentNote')}</p>
+        {order.status === 'REJECTED' ? (
+          <div className="order-rejected" role="status">
+            <CircleX size={20} aria-hidden="true" />
+            <div>
+              <strong>{t('order.rejectedTitle')}</strong>
+              <p>{order.rejectReason && hasMessage(`order.rejectReasons.${order.rejectReason}`)
+                ? t(`order.rejectReasons.${order.rejectReason}`) : t('order.rejectedText')}</p>
+            </div>
+          </div>
+        ) : (
+          <OrderTracker order={order} />
+        )}
+        {order.status !== 'REJECTED' && order.status !== 'PICKED_UP' && (
+          <p className="order-payment-note"><Wallet size={16} aria-hidden="true" />
+            {t(order.status === 'PENDING_PAYMENT' ? 'order.paymentNote' : 'order.payAtCounter')}</p>
         )}
         <p className="muted small">{t('order.fullId')}: <code>{order.id}</code></p>
       </section>

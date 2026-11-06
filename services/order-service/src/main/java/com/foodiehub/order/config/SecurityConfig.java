@@ -31,6 +31,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/orders", "/api/v1/orders/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/owner/orders").hasRole("RESTAURANT_OWNER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/owner/orders/*/status").hasRole("RESTAURANT_OWNER")
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(KeycloakRoles.authenticationConverter()))

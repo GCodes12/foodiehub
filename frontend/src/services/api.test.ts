@@ -165,6 +165,16 @@ describe('api client — owner endpoints (DEC-015)', () => {
     assert.deepEqual(JSON.parse(fetch.calls[0].init.body as string), { available: true, price: 95 });
   });
 
+  it('sends a status change with the expected current status', async () => {
+    const fetch = fakeFetch(new Response(JSON.stringify({ ...ORDER, status: 'ACCEPTED' })));
+    const api = createApi(async () => 'owner-token', { fetchImpl: fetch.impl });
+    const updated = await api.updateOrderStatus('o-1', { from: 'PENDING_PAYMENT', status: 'ACCEPTED' });
+    assert.equal(updated.status, 'ACCEPTED');
+    assert.equal(fetch.calls[0].url, '/api/v1/owner/orders/o-1/status');
+    assert.equal(fetch.calls[0].init.method, 'PATCH');
+    assert.deepEqual(JSON.parse(fetch.calls[0].init.body as string), { from: 'PENDING_PAYMENT', status: 'ACCEPTED' });
+  });
+
   it('explains a 403 from the server', async () => {
     const api = createApi(async () => 't', { fetchImpl: async () => problem(403, { status: 403, code: 'FORBIDDEN', detail: 'x' }) });
     await assert.rejects(api.listOwnerOrders(), (e: unknown) => e instanceof ApiError && describeError(e) === "Your account isn't allowed to do this.");

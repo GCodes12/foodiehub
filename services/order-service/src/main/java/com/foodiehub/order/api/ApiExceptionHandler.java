@@ -5,6 +5,8 @@ import java.util.Map;
 
 import com.foodiehub.order.order.CheckoutRejectedException;
 import com.foodiehub.order.order.IdempotencyConflictException;
+import com.foodiehub.order.order.IllegalOrderTransitionException;
+import com.foodiehub.order.order.OrderChangedException;
 import com.foodiehub.order.restaurant.OwnedRestaurantsClient;
 import com.foodiehub.order.restaurant.RestaurantNotOrderableException;
 import com.foodiehub.order.restaurant.RestaurantServiceUnavailableException;
@@ -84,6 +86,16 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ProblemDetail restaurantDown(RestaurantServiceUnavailableException e) {
         log.warn("Restaurant Service unavailable: {}", e.getMessage());
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "PRICING_UNAVAILABLE");
+    }
+
+    @ExceptionHandler(IllegalOrderTransitionException.class)
+    ProblemDetail invalidTransition() {
+        return problem(HttpStatus.CONFLICT, "INVALID_TRANSITION");
+    }
+
+    @ExceptionHandler(OrderChangedException.class)
+    ProblemDetail orderChanged() {
+        return problem(HttpStatus.CONFLICT, "ORDER_CHANGED");
     }
 
     @ExceptionHandler(OwnedRestaurantsClient.OwnershipUnavailableException.class)

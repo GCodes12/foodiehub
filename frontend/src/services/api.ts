@@ -1,5 +1,6 @@
 import type {
   CreateOrderRequest, Diet, FieldError, Menu, MenuItem, MenuItemChanges, Order, OwnedRestaurant, RestaurantSummary,
+  StatusChangeRequest,
 } from '../types/api.ts';
 import { hasMessage, t } from '../utils/i18n.ts';
 
@@ -128,6 +129,15 @@ export function createApi(getToken: TokenProvider, options: ApiOptions = {}) {
     /** Orders at the owner's restaurants, newest first. */
     async listOwnerOrders(): Promise<Order[]> {
       return (await call<Order[]>(ownerOrders, {}, true)).body;
+    },
+
+    /** Moves an order along its lifecycle (DEC-016). */
+    async updateOrderStatus(orderId: string, change: StatusChangeRequest): Promise<Order> {
+      return (await call<Order>(`${ownerOrders}/${encodeURIComponent(orderId)}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(change),
+      }, true)).body;
     },
   };
 }

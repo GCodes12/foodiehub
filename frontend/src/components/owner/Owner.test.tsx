@@ -76,10 +76,35 @@ describe('OwnerOrderList', () => {
     assert.match(page, /₹598\.00/);
     assert.match(page, /AAAAAAAA/);
     assert.match(page, /2 × Classic Chicken Dum Biryani/);
-    assert.match(page, /Pending payment/);
+    assert.match(page, /Waiting for the restaurant/);
   });
 
   it('shows an empty state without orders', () => {
     assert.match(text(render(<OwnerOrderList orders={[]} />)), /No orders yet/);
   });
+
+  it('offers Accept and Reject for a new order and exactly one next step afterwards', () => {
+    const noop = () => {};
+    const actions = { onAccept: noop, onReject: noop, onAdvance: noop };
+    const html = render(<OwnerOrderList actions={actions} orders={[
+      { ...order('aaaaaaaa-1', new Date().toISOString(), 10), status: 'PENDING_PAYMENT' },
+      { ...order('bbbbbbbb-2', new Date().toISOString(), 10), status: 'ACCEPTED' },
+      { ...order('cccccccc-3', new Date().toISOString(), 10), status: 'PREPARING' },
+      { ...order('dddddddd-4', new Date().toISOString(), 10), status: 'READY_FOR_PICKUP' },
+    ]} />);
+    const page = text(html);
+    assert.match(page, /AAAAAAAA.*Reject.*Accept.*BBBBBBBB.*Start preparing.*CCCCCCCC.*Mark ready.*DDDDDDDD.*Picked up/);
+    assert.match(html, /data-testid="orders-waiting">1</);
+    assert.equal((page.match(/Accept\b/g) ?? []).length, 1);
+  });
+
+  it('shows no buttons on finished orders, and the reason for a rejection', () => {
+    const html = render(<OwnerOrderList actions={{ onAccept: () => {}, onReject: () => {}, onAdvance: () => {} }} orders={[
+      { ...order('eeeeeeee-5', new Date().toISOString(), 10), status: 'REJECTED', rejectReason: 'TOO_BUSY' },
+      { ...order('ffffffff-6', new Date().toISOString(), 10), status: 'PICKED_UP' },
+    ]} />);
+    assert.doesNotMatch(html, /owner-order-actions/);
+    assert.match(text(html), /Reason: The kitchen is too busy right now\./);
+  });
 });
+

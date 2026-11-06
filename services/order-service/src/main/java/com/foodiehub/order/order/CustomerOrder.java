@@ -15,6 +15,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 /** A submitted pickup order. Created only through {@link #create}; persisted together with its lines. */
 @Entity
@@ -58,6 +59,18 @@ public class CustomerOrder {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /** Optimistic locking (DEC-016): two simultaneous status changes cannot both win. */
+    @Version
+    @Column(nullable = false)
+    private long version;
+
+    @Column(name = "status_updated_at")
+    private Instant statusUpdatedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reject_reason", length = 30)
+    private RejectReason rejectReason;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("lineNo ASC")
     private List<OrderItem> items = new ArrayList<>();
@@ -88,6 +101,24 @@ public class CustomerOrder {
         return order;
     }
 
+    /**
+     * Moves the order to {@code target} (DEC-016). The caller checks ownership; this checks the transition itself.
+     * A reason is only allowed when rejecting.
+     */
+    OrderStatusChange moveTo(OrderStatus target, RejectReason reason, String changedBy, Instant now) {
+        if (!status.canMoveTo(target)) {
+            throw new IllegalOrderTransitionException(status, target);
+        }
+        if (reason != null && target != OrderStatus.REJECTED) {
+            throw new IllegalOrderTransitionException(status, target);
+        }
+        OrderStatusChange change = new OrderStatusChange(id, status, target, changedBy, now, reason);
+        status = target;
+        statusUpdatedAt = now;
+        rejectReason = target == OrderStatus.REJECTED ? reason : null;
+        return change;
+    }
+
     public String getId() { return id; }
     public String getCustomerId() { return customerId; }
     public String getRestaurantId() { return restaurantId; }
@@ -98,5 +129,8 @@ public class CustomerOrder {
     public BigDecimal getTotal() { return total; }
     public String getRequestHash() { return requestHash; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getStatusUpdatedAt() { return statusUpdatedAt; }
+    public RejectReason getRejectReason() { return rejectReason; }
+    public long getVersion() { return version; }
     public List<OrderItem> getItems() { return items; }
 }

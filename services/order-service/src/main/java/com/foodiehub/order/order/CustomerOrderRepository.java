@@ -14,6 +14,9 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, St
     Optional<CustomerOrder> findByIdAndCustomerId(String id, String customerId);
 
     @EntityGraph(attributePaths = "items")
+    Optional<CustomerOrder> findWithItemsById(String id);
+
+    @EntityGraph(attributePaths = "items")
     Optional<CustomerOrder> findByCustomerIdAndIdempotencyKey(String customerId, String idempotencyKey);
 
     /** The customer's own orders, newest first (DEC-014, US-04 list). Ownership is part of the query. */

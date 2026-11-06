@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import com.foodiehub.order.order.OrderLifecycle;
 import com.foodiehub.order.order.OrderPricing;
 import com.foodiehub.order.order.OrderService;
 import jakarta.validation.Valid;
@@ -34,9 +35,11 @@ public class OrderController {
     private static final Pattern KEY_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{8,64}$");
 
     private final OrderService orderService;
+    private final OrderLifecycle lifecycle;
 
-    public OrderController(OrderService orderService) {
+    public OrderController(OrderService orderService, OrderLifecycle lifecycle) {
         this.orderService = orderService;
+        this.lifecycle = lifecycle;
     }
 
     @PostMapping
@@ -66,7 +69,7 @@ public class OrderController {
     @GetMapping("/{id}")
     public OrderResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable String id) {
         return orderService.findOwnOrder(id, jwt.getSubject())
-                .map(OrderResponse::from)
+                .map(order -> OrderResponse.from(order, lifecycle.historyOf(order.getId())))
                 .orElseThrow(OrderNotFoundException::new);
     }
 }

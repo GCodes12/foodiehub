@@ -2,14 +2,17 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { ChevronRight, ClipboardList } from 'lucide-react';
 import { DishImage } from '../components/common/DishImage.tsx';
+import { StatusBadge } from '../components/common/StatusBadge.tsx';
 import { EmptyState } from '../components/common/EmptyState.tsx';
 import { ErrorMessage } from '../components/common/ErrorMessage.tsx';
 import { Skeleton } from '../components/common/Skeleton.tsx';
 import { useMenu } from '../hooks/useMenu.ts';
 import { usePageMeta } from '../hooks/usePageMeta.ts';
+import { usePolling } from '../hooks/usePolling.ts';
 import { api } from '../services/client.ts';
 import type { Order } from '../types/api.ts';
-import { hasMessage, t } from '../utils/i18n.ts';
+import { t } from '../utils/i18n.ts';
+import { isActive } from '../utils/orderStatus.ts';
 import { formatRupees } from '../utils/money.ts';
 import { paths } from '../utils/paths.ts';
 
@@ -29,6 +32,10 @@ export function MyOrdersPage() {
       active = false;
     };
   }, [attempt]);
+
+  usePolling(() => {
+    api.listOrders().then(setOrders, () => {});
+  }, 20_000, orders !== null && orders.some((o) => isActive(o.status)));
 
   const byId = new Map(menu.status === 'ready' ? menu.data.items.map((i) => [i.id, i] as const) : []);
 
@@ -56,7 +63,6 @@ export function MyOrdersPage() {
         <ul className="order-list">
           {orders.map((order) => {
             const count = order.items.reduce((sum, line) => sum + line.quantity, 0);
-            const status = hasMessage(`order.statuses.${order.status}`) ? t(`order.statuses.${order.status}`) : order.status;
             return (
               <li key={order.id}>
                 <Link to={paths.order(order.id)} className="order-row" aria-label={`${t('orders.view')} ${order.id.slice(0, 8).toUpperCase()}`}>
@@ -69,7 +75,7 @@ export function MyOrdersPage() {
                   </div>
                   <div className="order-row-main">
                     <div className="order-row-title"><code>{order.id.slice(0, 8).toUpperCase()}</code>
-                      <span className="badge badge-warning">{status}</span></div>
+                      <StatusBadge status={order.status} /></div>
                     <div className="order-row-items">{order.items.map((line) => line.name).join(', ')}</div>
                     <div className="muted small">
                       {new Date(order.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
