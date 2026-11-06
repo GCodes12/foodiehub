@@ -1,6 +1,6 @@
 # FoodieHub — Clarification Log
 
-> **Status: PARTLY ANSWERED.** Owner decisions **DEC-001 – DEC-013** are recorded in §9.2. Everything
+> **Status: PARTLY ANSWERED.** Owner decisions **DEC-001 – DEC-015** are recorded in §9.2. Everything
 > not covered by those decisions remains open. Recommended defaults (§9.1) take effect only when the owner records an
 > answer in §9.2.
 >
@@ -11,7 +11,7 @@
 used exactly as in `raw-requirement.md`. Questions Q-01 – Q-16 are defined there and referenced here. New questions
 continue the same series from **Q-17**. The proposed slice is called **VS-1**, its checkpoints **CP-1 – CP-5**, its draft
 acceptance criteria **VS1-AC1 – VS1-AC9**, the conflicts found here **CC-1 – CC-6**, and the owner decisions
-**DEC-001 – DEC-013** (§9.2). These are distinct from the `raw-requirement.md` findings C-01 – C-17.
+**DEC-001 – DEC-015** (§9.2). These are distinct from the `raw-requirement.md` findings C-01 – C-17.
 
 ---
 
@@ -472,6 +472,47 @@ The same message instructed implementation in the order CP-2 (Keycloak), CP-3 (O
 - Coupons (A-3): DEC-013 covers tax and fees only.
 - How the internal call is authenticated (SEC-005), Q-23 (who may order), the idempotency details (§5.4, DEC-006), Q-25 (persisted fields), Q-16, Q-26, Q-27.
 - The final OPEN-13 policy beyond VS-1 (gate M2).
+
+#### DEC-014 — ZAYORA brand, menu data model and seed, customer order list (2026-11-06)
+Owner selections (multiple-choice answers, 2026-11-06), after the owner supplied the ZAYORA frontend specification
+and logo:
+
+- **Brand:** the customer-facing frontend becomes **ZAYORA** ("WHERE HUNGER MEETS FLAVOURS."), an Indian
+  restaurant with biryani as its signature. Internal names (repository, realm `foodiehub`, services) are unchanged.
+- **Menu data (selected "Extend backend"):** an additive Restaurant Service migration adds category, description,
+  diet (veg / egg / non-veg), bestseller and chef-special flags and an image key to menu items, and the menu API
+  returns them. The demo seed is replaced by the ZAYORA menu.
+- **Menu and prices (selected "Approve as proposed"):** the 42-dish ZAYORA menu with the INR prices, labels and
+  combo contents presented to the owner on 2026-11-06 (now in `R__seed_demo_restaurant.sql`); Phirni is seeded as
+  unavailable for demonstration. Prices remain `DECIMAL(10,2)` (DEC-012).
+- **Customer order list (selected "Build GET /orders"):** `GET /api/v1/orders` returns the signed-in customer's own
+  orders, newest first (US-04, list part only). Same authentication and ownership rules as DEC-013 Q-24.
+- **Images:** the owner provides AI-generated photos; placeholders are used until then.
+- **Frontend libraries (selected "Router + Lucide only"):** React Router and lucide-react are added; styling stays
+  on the existing CSS design tokens and the API client on `fetch`.
+
+**Not decided by DEC-014:** pagination or filtering of the order list; cancel (rest of US-04/US-05); combo
+customisation; customer reviews (sample content only, labelled); popularity data; multiple restaurants;
+everything listed under DEC-013 "Not decided".
+
+#### DEC-015 — Roles, owner slice and who may order (Q-23) (2026-11-06)
+Owner selections (multiple-choice answers, 2026-11-06):
+
+- **Scope (selected "Owner slice"):** Keycloak realm roles `CUSTOMER` and `RESTAURANT_OWNER`; a demo owner account; an
+  owner dashboard where an owner can mark their restaurant's dishes available or sold out, edit price, description and
+  bestseller / chef-special labels, and see incoming orders for their restaurants. **No order status changes** (the
+  order state machine remains a proposal) and no admin features.
+- **Q-23 — who may order (selected "CUSTOMER role only"):** only users with the `CUSTOMER` realm role may create
+  orders; others get 403. Viewing one's own orders is unchanged (any signed-in user, own orders only).
+
+**Implementation choices, not owner-approved (proposals):** an owner is linked to a restaurant by Keycloak username in
+`restaurant_db.restaurant_owner` (an admin assigns owners in US-09 later; a switch to the immutable user ID is
+recommended then); owner endpoints live under `/api/v1/owner/**`; the Restaurant Service validates tokens only for
+those endpoints (audience `restaurant-service`); the Order Service asks the Restaurant Service which restaurants the
+caller owns, forwarding the caller's token.
+
+**Not decided by DEC-015:** order status transitions (accept / reject / ready), adding or removing dishes, admin
+(US-09), price-change rules or history, notifications.
 ---
 
 ## 10. Decisions needed next

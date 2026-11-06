@@ -1,0 +1,9 @@
+<!doctype html>
+<html>
+  <body>
+    <script>
+      // Keycloak silent sign-in check: hands the result back to the app without a full page redirect.
+      parent.postMessage(location.href, location.origin);
+    </script>
+  </body>
+</html>

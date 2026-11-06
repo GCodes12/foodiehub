@@ -1,7 +1,7 @@
 #!/bin/bash
 # Runs once, when the MySQL data volume is first initialised.
-# restaurant_db with two users (plan.md §7): a migrator for Flyway DDL and seed data, and a SELECT-only
-# runtime user (the restaurant service is read-only in VS-1). No grants on any other database.
+# restaurant_db with two users (plan.md §7): a migrator for Flyway DDL and seed data, and a runtime user with
+# SELECT plus UPDATE on menu_item (owner edits, DEC-015). No grants on any other database.
 set -euo pipefail
 
 mysql --protocol=socket -uroot -p"${MYSQL_ROOT_PASSWORD}" <<SQL
@@ -13,4 +13,5 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES
 
 CREATE USER IF NOT EXISTS 'restaurant_app'@'%' IDENTIFIED BY '${RESTAURANT_DB_APP_PASSWORD}';
 GRANT SELECT ON restaurant_db.* TO 'restaurant_app'@'%';
+GRANT UPDATE ON restaurant_db.menu_item TO 'restaurant_app'@'%';
 SQL

@@ -101,6 +101,26 @@ class JwtValidationTest {
         verify(orderService).findOwnOrder(ORDER_ID, "alice-sub");
     }
 
+    @Test
+    void aValidTokenWithoutTheCustomerRoleCannotPlaceOrders() throws Exception {
+        String token = sign(SIGNING_KEY, claims().claim("realm_access", java.util.Map.of("roles", List.of("RESTAURANT_OWNER"))).build());
+        mvc.perform(post("/api/v1/orders")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"restaurantId\":\"r1\",\"fulfilmentType\":\"PICKUP\",\"items\":[{\"menuItemId\":\"m1\",\"quantity\":1}]}"))
+                .andExpect(status().isForbidden());
+        verify(orderService, never()).create(any());
+    }
+
+    @Test
+    void mapsKeycloakRealmRolesFromTheToken() {
+        var jwt = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("t").header("alg", "RS256")
+                .claim("realm_access", java.util.Map.of("roles", List.of("CUSTOMER", "offline_access"))).build();
+        assertThat(new com.foodiehub.order.config.KeycloakRoles().convert(jwt)).extracting(Object::toString)
+                .containsExactlyInAnyOrder("ROLE_CUSTOMER", "ROLE_offline_access");
+    }
+
     // --- Invalid tokens -----------------------------------------------------------------------------------------
 
     enum BadToken {
@@ -132,6 +152,14 @@ class JwtValidationTest {
                 .andReturn();
 
         assertThat(result.getResponse().getHeader(HttpHeaders.WWW_AUTHENTICATE)).contains("error=\"invalid_token\"");
+        verifyNoInteractions(orderService);
+    }
+
+    @ParameterizedTest
+    @EnumSource(BadToken.class)
+    void rejectsAnInvalidTokenWhenListingOrders(BadToken kind) throws Exception {
+        mvc.perform(get("/api/v1/orders").header(HttpHeaders.AUTHORIZATION, bearer(token(kind))))
+                .andExpect(status().isUnauthorized());
         verifyNoInteractions(orderService);
     }
 

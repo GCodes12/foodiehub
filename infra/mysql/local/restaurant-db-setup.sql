@@ -2,7 +2,7 @@
 --
 -- Creates restaurant_db and two accounts (plan.md §7):
 --   * migrator — used by Flyway: DDL plus seed-data DML, on restaurant_db only;
---   * app      — used by the running service: SELECT only (the service is read-only in VS-1).
+--   * app      — used by the running service: SELECT, plus UPDATE on menu_item for owner edits (DEC-015).
 -- Accounts are created for 'localhost' (socket / name-resolved) and '127.0.0.1' (TCP), never for '%'.
 --
 -- Nothing is dropped, and existing accounts are NOT modified (CREATE USER IF NOT EXISTS keeps the existing
@@ -42,11 +42,15 @@ SET @sql = CONCAT('CREATE USER IF NOT EXISTS ', QUOTE(@app_user), '@''localhost'
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql = CONCAT('GRANT SELECT ON restaurant_db.* TO ', QUOTE(@app_user), '@''localhost''');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = CONCAT('GRANT UPDATE ON restaurant_db.menu_item TO ', QUOTE(@app_user), '@''localhost''');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- app @ 127.0.0.1
 SET @sql = CONCAT('CREATE USER IF NOT EXISTS ', QUOTE(@app_user), '@''127.0.0.1'' IDENTIFIED BY ', QUOTE(@app_password));
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql = CONCAT('GRANT SELECT ON restaurant_db.* TO ', QUOTE(@app_user), '@''127.0.0.1''');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = CONCAT('GRANT UPDATE ON restaurant_db.menu_item TO ', QUOTE(@app_user), '@''127.0.0.1''');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- Forget the passwords for the rest of this session.

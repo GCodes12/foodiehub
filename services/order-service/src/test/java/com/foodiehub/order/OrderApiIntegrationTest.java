@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -24,6 +25,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import com.foodiehub.order.restaurant.OwnedRestaurantsClient;
 import com.foodiehub.order.restaurant.RestaurantMenu;
 import com.foodiehub.order.restaurant.RestaurantMenuClient;
 import com.foodiehub.order.restaurant.RestaurantNotOrderableException;
@@ -41,6 +43,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -64,6 +67,8 @@ class OrderApiIntegrationTest {
     private static final String JAMUN = "00000000-0000-0000-0001-000000000004";
     private static final String ALICE = "sub-alice";
     private static final String BOB = "sub-bob";
+    private static final SimpleGrantedAuthority CUSTOMER = new SimpleGrantedAuthority("ROLE_CUSTOMER");
+    private static final SimpleGrantedAuthority OWNER = new SimpleGrantedAuthority("ROLE_RESTAURANT_OWNER");
 
     @Container
     @ServiceConnection
@@ -77,6 +82,9 @@ class OrderApiIntegrationTest {
 
     @MockitoBean
     RestaurantMenuClient restaurantMenuClient;
+
+    @MockitoBean
+    OwnedRestaurantsClient ownedRestaurants;
 
     @BeforeEach
     void setUp() {
@@ -104,7 +112,7 @@ class OrderApiIntegrationTest {
 
     private static MockHttpServletRequestBuilder createAs(String sub, String key, String json) {
         MockHttpServletRequestBuilder req = post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(json)
-                .with(jwt().jwt(j -> j.subject(sub)));
+                .with(jwt().jwt(j -> j.subject(sub)).authorities(CUSTOMER));
         return key == null ? req : req.header("Idempotency-Key", key);
     }
 
@@ -383,4 +391,101 @@ class OrderApiIntegrationTest {
         assertThat(othersOrder.replace(id, "{id}")).isEqualTo(nonexistent.replace(missing, "{id}"));
         assertThat(othersOrder).doesNotContain(ALICE, "Masala");
     }
+
+    // --- Order list (DEC-014, US-04 list) ----------------------------------------------------------------------
+
+    @Test
+    void listShowsOnlyTheCallersOwnOrdersNewestFirst() throws Exception {
+        String first = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        Thread.sleep(5); // distinct created_at values (microsecond precision)
+        String second = idOf(mvc.perform(createAs(ALICE, newKey(), body(line(DOSA, 1))))
+                .andExpect(status().isCreated()).andReturn());
+        String bobs = idOf(mvc.perform(createAs(BOB, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+
+        mvc.perform(get("/api/v1/orders").with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(second))
+                .andExpect(jsonPath("$[1].id").value(first))
+                .andExpect(jsonPath("$[0].items.length()").value(1))
+                .andExpect(jsonPath("$[1].items.length()").value(2))
+                .andExpect(jsonPath("$[1].total").value(508.00))
+                .andExpect(jsonPath("$[?(@.id == '" + bobs + "')]").isEmpty());
+
+        mvc.perform(get("/api/v1/orders").with(jwt().jwt(j -> j.subject(BOB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(bobs));
+    }
+
+    @Test
+    void listIsEmptyForACustomerWithoutOrders() throws Exception {
+        mvc.perform(get("/api/v1/orders").with(jwt().jwt(j -> j.subject("sub-nobody"))))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void listRequiresAuthentication() throws Exception {
+        mvc.perform(get("/api/v1/orders")).andExpect(status().isUnauthorized());
+    }
+
+    // --- Roles (DEC-015, Q-23) and the owner order view -------------------------------------------------------
+
+    @Test
+    void onlyTheCustomerRoleMayPlaceOrders() throws Exception {
+        for (SimpleGrantedAuthority[] roles : new SimpleGrantedAuthority[][] {{}, {OWNER}}) {
+            mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(VALID)
+                            .header("Idempotency-Key", newKey()).with(jwt().jwt(j -> j.subject("sub-owner")).authorities(roles)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+        assertThat(orderCount()).isZero();
+        verify(restaurantMenuClient, never()).fetchMenu(anyString());
+    }
+
+    @Test
+    void anOwnerSeesTheOrdersOfTheirRestaurantsOnlyNewestFirst() throws Exception {
+        String first = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        Thread.sleep(5);
+        String second = idOf(mvc.perform(createAs(BOB, newKey(), body(line(DOSA, 1)))).andExpect(status().isCreated()).andReturn());
+        jdbc.update("INSERT INTO customer_order (id, customer_id, restaurant_id, fulfilment_type, status, currency, subtotal, total,"
+                + " idempotency_key, request_hash, created_at) VALUES ('other-r-order', 'sub-x', 'other-restaurant', 'PICKUP',"
+                + " 'PENDING_PAYMENT', 'INR', 10.00, 10.00, 'key-other-1', REPEAT('a', 64), NOW(6))");
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of(RID));
+
+        mvc.perform(get("/api/v1/owner/orders").with(jwt().jwt(j -> j.subject("sub-owner")).authorities(OWNER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(second))
+                .andExpect(jsonPath("$[1].id").value(first))
+                .andExpect(jsonPath("$[0].customerId").doesNotExist());
+    }
+
+    @Test
+    void anOwnerOfNoRestaurantSeesNothing() throws Exception {
+        mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated());
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of());
+        mvc.perform(get("/api/v1/owner/orders").with(jwt().authorities(OWNER)))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void customersCannotUseTheOwnerView() throws Exception {
+        mvc.perform(get("/api/v1/owner/orders").with(jwt().authorities(CUSTOMER)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/owner/orders")).andExpect(status().isUnauthorized());
+        verify(ownedRestaurants, never()).ownedRestaurantIds(anyString());
+    }
+
+    @Test
+    void theOwnerViewReports503WhenOwnershipCannotBeChecked() throws Exception {
+        given(ownedRestaurants.ownedRestaurantIds(anyString()))
+                .willThrow(new OwnedRestaurantsClient.OwnershipUnavailableException(new RuntimeException("down")));
+        mvc.perform(get("/api/v1/owner/orders").with(jwt().authorities(OWNER)))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("OWNER_DATA_UNAVAILABLE"));
+    }
 }
+

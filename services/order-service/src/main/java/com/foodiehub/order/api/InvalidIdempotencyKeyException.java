@@ -1,9 +1,9 @@
 package com.foodiehub.order.api;
 
+/** Missing or malformed Idempotency-Key header. Client text: problem.INVALID_IDEMPOTENCY_KEY in messages.properties. */
 class InvalidIdempotencyKeyException extends RuntimeException {
 
     InvalidIdempotencyKeyException() {
-        super("An Idempotency-Key header of 8-64 characters (letters, digits, '-' or '_') is required; a UUID is recommended.",
-                null, false, false);
+        super("INVALID_IDEMPOTENCY_KEY", null, false, false);
     }
 }

@@ -1,11 +1,23 @@
 spring:
   application:
     name: restaurant-service
+  messages:
+    # Client-facing texts live in messages.properties. Never pick a bundle from the machine's locale.
+    basename: messages
+    fallback-to-system-locale: false
   jpa:
     open-in-view: false
     hibernate:
       # The schema is owned by Flyway migrations; Hibernate never changes it.
       ddl-auto: none
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # DEC-015: only the owner endpoints need a token. It must come from the FoodieHub realm and be issued
+          # for this service.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/foodiehub}
+          audiences: restaurant-service
   flyway:
     # Schema only. Demo seed data is added by the dev profile (application-dev.yml).
     locations: classpath:db/migration

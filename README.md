@@ -3,9 +3,10 @@
 FoodieHub is a food-ordering platform built as a **learning and portfolio project**. It is a
 hands-on way to practise microservice design, OAuth2/OIDC security, and Spec-Driven Development (SDD).
 
-> **Status: VS-1, CP-1 – CP-4 (backend) working locally.** Public restaurant and menu browsing, Keycloak sign-in,
-> authenticated pickup ordering and owner-only order retrieval run locally against MySQL. **No payment is taken**:
-> every order stays `PENDING_PAYMENT`. The web frontend and the gateway are not built yet.
+> **Status: VS-1, CP-1 – CP-5 working locally.** The customer web app is branded **ZAYORA** ("Where hunger meets
+> flavours."), an Indian restaurant with biryani as its signature (DEC-014). Browse the 42-dish menu, sign in with
+> Keycloak, check out a pickup order, and see it in My Orders. It runs locally against MySQL. **No payment is
+> taken**: every order stays `PENDING_PAYMENT`. The gateway is not built yet (the Vite dev proxy stands in for it).
 
 ## Planned MVP scope
 
@@ -44,12 +45,13 @@ condition that a compatible Spring Cloud release train is confirmed first.
 
 | Item | Status |
 |---|---|
-| Current phase | **VS-1, CP-1 – CP-4 (backend)** — browse, sign in, place a pickup order, view your own order |
-| Restaurant service | Implemented: list, detail and menu endpoints; Flyway schema; demo seed; tests |
-| Order service | Implemented: `POST /api/v1/orders` (server pricing, snapshots, one transaction, idempotent) and `GET /api/v1/orders/{id}` (owner only); tests |
-| Gateway, frontend, payment/notification services | Not started |
+| Current phase | **VS-1, CP-1 – CP-5** — browse, sign in, place a pickup order, view your own order (web app + backend) |
+| Restaurant service | Implemented: list, detail and menu endpoints (menu items carry category, description, diet, bestseller / chef-special labels and an image key, DEC-014); Flyway schema V1–V2; ZAYORA seed (42 dishes); tests |
+| Order service | Implemented: `POST /api/v1/orders` (server pricing, snapshots, one transaction, idempotent) `GET /api/v1/orders/{id}` (owner only) and `GET /api/v1/orders` (the customer's own orders, newest first, DEC-014); tests |
+| Frontend | Implemented ([`frontend/`](frontend/)): ZAYORA web app — React + Vite + React Router; home, menu (categories, search, veg/egg/non-veg filter, price sort, dish detail), cart, protected checkout with a retry-safe `Idempotency-Key`, order confirmation, My Orders; Keycloak sign-in (PKCE); 65 tests |
+| Gateway, payment/notification services | Not started. In development the Vite proxy routes `/api/v1/*` to the services |
 | Build files | Maven Wrapper + root aggregator POM; Docker Compose for MySQL only. CI pipelines: not created |
-| Security controls | Keycloak realm `foodiehub`; order-service validates JWTs (issuer, signature, audience `order-service`); owner-only reads. Browsing stays public by design. **Not implemented:** gateway, roles (Q-23), authentication of the internal price lookup (SEC-005) |
+| Security controls | Keycloak realm `foodiehub` with roles `CUSTOMER` and `RESTAURANT_OWNER` (DEC-015); both services validate JWTs (issuer, signature, audience); only customers order; owners manage only their own restaurant; customers see only their own orders. Browsing stays public by design. **Not implemented:** gateway, admin role, authentication of the internal price lookup (SEC-005) |
 | Payments | **Not available.** No payment processing of any kind exists |
 | Documentation | SDD documents in [`docs/sdd/`](docs/sdd/) |
 
@@ -61,6 +63,7 @@ restaurant service. An [optional Docker setup](#optional-docker-setup) is kept f
 #### 1. Prerequisites
 
 - **JDK 21.** Maven is not needed: use the Maven Wrapper (`./mvnw`).
+- **Node.js** for the frontend (step 10): Node 22.12+ or 24 LTS recommended; Node 23.11 also works.
 - **MySQL Community Server 8.4 LTS**, installed with either:
   - the macOS DMG from dev.mysql.com (choose the ARM64 or x86_64 build). The installer asks you to set a
     `root` password; the client is then at `/usr/local/mysql/bin/mysql`; or
@@ -212,7 +215,8 @@ In `.env`, set `KEYCLOAK_HOME` (e.g. `/Users/<you>/dev-tools/keycloak-26.8.1`), 
 
 ```bash
 infra/keycloak/start-local-keycloak.sh    # keep this terminal open; Ctrl+C stops Keycloak
-infra/keycloak/create-dev-users.sh        # once, in a second terminal: creates the demo users alice and bob
+infra/keycloak/create-dev-users.sh        # in a second terminal (safe to re-run): roles CUSTOMER and RESTAURANT_OWNER,
+                                          # users alice and bob (customers) and owner (manages ZAYORA)
 ```
 
 - Keycloak listens on `http://localhost:8080` (bound to 127.0.0.1). Admin console: `http://localhost:8080/admin`
@@ -301,6 +305,52 @@ curl -i http://localhost:8082/api/v1/orders -H "Authorization: Bearer $TOKEN" -H
   -d '{"restaurantId":"00000000-0000-0000-0000-000000000001","fulfilmentType":"PICKUP","items":[{"menuItemId":"00000000-0000-0000-0001-000000000001","quantity":2}]}'
 ```
 
+#### 10. Start the web app (CP-5)
+
+Needs the restaurant service (step 5), Keycloak (step 7) and the order service (step 8) running.
+
+```bash
+cd frontend
+npm install        # first time only
+npm run dev        # http://localhost:5173
+```
+
+Open **http://localhost:5173**. Pages: Home, Explore Menu (`/menu`), Our Story, Cart, Checkout, My Orders, order
+details. Browsing is public; **Checkout** and **My Orders** ask you to log in (user `alice` or `bob`, password
+`FOODIEHUB_DEMO_USER_PASSWORD` from `.env`) and bring you back afterwards, cart intact.
+
+**Roles (DEC-015).** One login page for everyone; the Keycloak role decides what you see and may do:
+
+| User | Role | Can |
+|---|---|---|
+| `alice`, `bob` | `CUSTOMER` | browse, order (only customers may order: Q-23), see their own orders |
+| `owner` | `RESTAURANT_OWNER` | **Kitchen** dashboard (`/kitchen`): mark dishes available / sold out, edit price, description and labels; see incoming orders for ZAYORA (refreshes every 30 s). Cannot order (403). |
+
+The owner is linked to ZAYORA in `restaurant_db.restaurant_owner` (dev seed). Owner API: `GET /api/v1/owner/restaurants`,
+`GET /api/v1/owner/restaurants/{id}/menu`, `PATCH /api/v1/owner/restaurants/{id}/menu-items/{itemId}` (Restaurant Service,
+token audience `restaurant-service`) and `GET /api/v1/owner/orders` (Order Service). Not built yet: order status
+changes (accept / prepare / ready), adding or removing dishes, admin.
+
+- Port **5173 is required**: Keycloak only accepts sign-in redirects to `http://localhost:5173`.
+- The dev server forwards `/api/v1/restaurants` to port 8081 and `/api/v1/orders` to port 8082 (`vite.config.ts`;
+  override with `RESTAURANT_SERVICE_URL` / `ORDER_SERVICE_URL`). The browser never calls the services directly.
+- Optional browser settings are in [`frontend/.env.example`](frontend/.env.example): service base URLs
+  (`VITE_RESTAURANT_API_URL`, `VITE_ORDER_API_URL`; direct URLs need CORS on the services), `VITE_RESTAURANT_ID`, and
+  Keycloak (`VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID`). No secrets: the client is public.
+- Tokens stay in memory and are refreshed automatically; an expired session shows a "log in again" prompt. The cart
+  is kept in `localStorage` (survives refreshes and the sign-in redirect) and is re-checked against the live menu:
+  sold-out dishes block checkout and display prices are refreshed. No prices are sent with an order.
+- **Images:** drop photos into `frontend/src/assets/{hero,dishes,categories}` using the names in
+  [`frontend/src/assets/README.md`](frontend/src/assets/README.md); they are picked up automatically, otherwise
+  placeholder artwork is shown. The current hero image is a temporary crop.
+- **Texts and messages:** all UI text and error messages are in
+  [`frontend/src/messages/en.json`](frontend/src/messages/en.json); colours and fonts are tokens in
+  `frontend/src/styles/tokens.css`. Backend error and validation texts are in each service's
+  `src/main/resources/messages.properties` (API responses carry a stable `code`; the frontend shows its own text).
+- The home page "What guests say" section is **sample content**, labelled as such; reviews are not collected.
+- Commands: `npm test` (logic and component tests: Node's built-in runner with `tsx`, components rendered with
+  `react-dom/server`), `npm run typecheck`, `npm run build`.
+
 #### Troubleshooting
 
 - **`Access denied for user 'restaurant_migrator'` (using password: YES)**:
@@ -327,6 +377,12 @@ simulated tokens and a mocked restaurant service. `JwtValidationTest` (no Docker
 through the service's token checks and expects `401` for a forged signature, a modified payload, an expired token,
 the wrong issuer, a wrong or missing audience, an unsigned token and a malformed token. Tokens from the running
 Keycloak are checked manually with steps 7–9.
+
+Frontend: `cd frontend && npm test` runs 65 tests: cart limits, totals and live-menu checks; menu search, category
+and diet filters and sorting; retry-safe idempotency keys; the API client (tokens, base URLs, Problem Details, expired
+sessions); messages; and rendered components (navbar, dish card, menu, protected routes, cart and checkout, order
+confirmation, error messages). Clicking through in a real browser is manual (step 10); browser end-to-end tests
+(Playwright) are planned for M5.
 
 #### Optional Docker setup
 

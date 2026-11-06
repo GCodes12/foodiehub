@@ -33,6 +33,6 @@ public class RestaurantCatalog {
     /** Empty when the restaurant does not exist <em>or</em> is inactive; callers must not distinguish the two. */
     public Optional<List<MenuItem>> findMenuOfActiveRestaurant(String restaurantId) {
         return restaurants.findByIdAndActiveTrue(restaurantId)
-                .map(r -> menuItems.findAllByRestaurantIdOrderByNameAscIdAsc(r.getId()));
+                .map(r -> menuItems.findAllByRestaurantIdOrderBySortOrderAscNameAscIdAsc(r.getId()));
     }
 }

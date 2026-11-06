@@ -1,6 +1,10 @@
 spring:
   application:
     name: order-service
+  messages:
+    # Client-facing texts live in messages.properties. Never pick a bundle from the machine's locale.
+    basename: messages
+    fallback-to-system-locale: false
   jpa:
     open-in-view: false
     hibernate:

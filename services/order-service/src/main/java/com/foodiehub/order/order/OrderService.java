@@ -13,7 +13,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
- * Order creation (CP-3) and owner-only retrieval (CP-4).
+ * Order creation (CP-3), owner-only retrieval (CP-4) and the customer's own order list (DEC-014).
  *
  * <p>Idempotency (DEC-006; details are an implementation proposal, see README): the key is scoped to the customer.
  * A repeat with the same key and the same request returns the original order without creating another one;
@@ -68,6 +68,16 @@ public class OrderService {
 
     public Optional<CustomerOrder> findOwnOrder(String orderId, String customerId) {
         return orders.findByIdAndCustomerId(orderId, customerId);
+    }
+
+    /** All orders of this customer, newest first. No other customer's order can appear (DEC-014). */
+    public List<CustomerOrder> listOwnOrders(String customerId) {
+        return orders.findAllByCustomerIdOrderByCreatedAtDescIdDesc(customerId);
+    }
+
+    /** Orders at the given restaurants, newest first (DEC-015). Callers pass only restaurants the owner manages. */
+    public List<CustomerOrder> listRestaurantOrders(List<String> restaurantIds) {
+        return restaurantIds.isEmpty() ? List.of() : orders.findAllByRestaurantIdInOrderByCreatedAtDescIdDesc(restaurantIds);
     }
 
     private static CreateResult replay(CustomerOrder existing, String hash) {

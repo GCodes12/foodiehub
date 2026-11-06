@@ -1,6 +1,7 @@
 package com.foodiehub.order.api;
 
 import java.net.URI;
+import java.util.List;
 import java.util.regex.Pattern;
 
 import com.foodiehub.order.order.OrderPricing;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * POST /api/v1/orders — authenticated pickup checkout (CP-3).
+ * GET  /api/v1/orders — the signed-in customer's own orders, newest first (DEC-014).
  * GET  /api/v1/orders/{id} — the orderer's own order only (CP-4).
  * The customer is always the token subject, never a value from the request (SEC-004).
  */
@@ -53,6 +55,12 @@ public class OrderController {
         return ResponseEntity.created(URI.create("/api/v1/orders/" + body.id()))
                 .header(REPLAYED, Boolean.toString(result.replayed()))
                 .body(body);
+    }
+
+    /** The signed-in customer's own orders, newest first (DEC-014). An empty list when there are none. */
+    @GetMapping
+    public List<OrderResponse> list(@AuthenticationPrincipal Jwt jwt) {
+        return orderService.listOwnOrders(jwt.getSubject()).stream().map(OrderResponse::from).toList();
     }
 
     @GetMapping("/{id}")

@@ -1,0 +1,74 @@
+/* ZAYORA design tokens. Brand palette from the brand specification:
+   Deep Burgundy #321319 · Warm Ivory #F7F0E5 · Antique Gold #D99A32 · Saffron Orange #E87524 · Charcoal #292321.
+   The brand is light-first (ivory pages, burgundy brand surfaces), so the scheme is fixed to light. */
+:root {
+  --burgundy: #321319;
+  --burgundy-90: #47222a;
+  --burgundy-80: #5c2f39;
+  --ivory: #f7f0e5;
+  --ivory-deep: #efe3d1;
+  --gold: #d99a32;
+  --gold-light: #ecc36f;
+  --gold-soft: #f6e6c4;
+  --saffron: #e87524;
+  --saffron-soft: #fde6d4;
+  --charcoal: #292321;
+  --white: #ffffff;
+
+  --color-bg: var(--ivory);
+  --color-surface: var(--white);
+  --color-surface-warm: #fbf6ee;
+  --color-text: var(--charcoal);
+  --color-text-muted: #6f625c;
+  --color-border: #e7dccb;
+  --color-primary: var(--burgundy);
+  --color-primary-hover: var(--burgundy-80);
+  --color-on-primary: var(--ivory);
+  --color-accent: var(--gold);
+  --color-highlight: var(--saffron);
+  --color-veg: #1e8e3e;
+  --color-nonveg: #a5281b;
+  --color-egg: #d9890a;
+  --color-success: #1e7a43;
+  --color-success-soft: #e6f4ea;
+  --color-warning: #9a5b00;
+  --color-warning-soft: #fdf0d9;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fbe9e7;
+  --color-focus: var(--saffron);
+
+  --font-display: 'Playfair Display Variable', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Plus Jakarta Sans Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.35rem;
+  --text-2xl: clamp(1.6rem, 2.6vw, 2.1rem);
+  --text-3xl: clamp(2rem, 4vw, 2.8rem);
+  --text-hero: clamp(2.4rem, 5.2vw, 4.1rem);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 72px;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(50 19 25 / 6%), 0 1px 1px rgb(50 19 25 / 4%);
+  --shadow-md: 0 8px 24px rgb(50 19 25 / 8%);
+  --shadow-lg: 0 20px 48px rgb(50 19 25 / 14%);
+
+  --navbar-height: 76px;
+  --container: 1200px;
+  color-scheme: light;
+}

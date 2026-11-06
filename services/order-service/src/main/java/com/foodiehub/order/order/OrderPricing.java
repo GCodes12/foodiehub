@@ -43,30 +43,28 @@ public final class OrderPricing {
 
         for (RequestedLine line : requested) {
             if (!seen.add(line.menuItemId())) {
-                throw new CheckoutRejectedException("DUPLICATE_ITEM",
-                        "Each menu item may appear only once; combine the quantities into one line.");
+                throw new CheckoutRejectedException("DUPLICATE_ITEM");
             }
             RestaurantMenu.Item item = byId.get(line.menuItemId());
             if (item == null) {
-                throw new CheckoutRejectedException("ITEM_NOT_IN_MENU",
-                        "A requested item does not exist in this restaurant's menu.");
+                throw new CheckoutRejectedException("ITEM_NOT_IN_MENU");
             }
             if (!item.available()) {
-                throw new CheckoutRejectedException("ITEM_UNAVAILABLE", "A requested item is currently unavailable.");
+                throw new CheckoutRejectedException("ITEM_UNAVAILABLE");
             }
             BigDecimal unitPrice = item.price().setScale(2); // menu prices are DECIMAL(10,2); throws if not exact
             BigDecimal lineAmount = unitPrice.multiply(BigDecimal.valueOf(line.quantity()));
             if (lineAmount.compareTo(MAX_AMOUNT) > 0) {
-                throw new CheckoutRejectedException("AMOUNT_TOO_LARGE", "An order line amount is too large.");
+                throw new CheckoutRejectedException("AMOUNT_TOO_LARGE");
             }
             subtotal = subtotal.add(lineAmount);
             if (subtotal.compareTo(MAX_AMOUNT) > 0) {
-                throw new CheckoutRejectedException("AMOUNT_TOO_LARGE", "The order total is too large.");
+                throw new CheckoutRejectedException("AMOUNT_TOO_LARGE");
             }
             lines.add(new PricedLine(item.id(), item.name(), unitPrice, line.quantity(), lineAmount));
         }
         if (lines.isEmpty()) {
-            throw new CheckoutRejectedException("EMPTY_ORDER", "An order needs at least one item.");
+            throw new CheckoutRejectedException("EMPTY_ORDER");
         }
         return new PricedOrder(List.copyOf(lines), subtotal, subtotal);
     }

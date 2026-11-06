@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
+import com.foodiehub.restaurant.config.SecurityConfig;
 import com.foodiehub.restaurant.domain.MenuItem;
 import com.foodiehub.restaurant.domain.Restaurant;
 import com.foodiehub.restaurant.domain.RestaurantCatalog;
@@ -19,11 +20,14 @@ import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+/** Public browsing: no token needed (DEC-009), even though the service now validates tokens for owner endpoints. */
 @WebMvcTest(RestaurantController.class)
+@Import(SecurityConfig.class)
 class RestaurantControllerTest {
 
     private static final String RID = "00000000-0000-0000-0000-000000000001";
@@ -74,6 +78,29 @@ class RestaurantControllerTest {
     }
 
     @Test
+    void menuItemsCarryTheirDetails() throws Exception {
+        given(catalog.findMenuOfActiveRestaurant(RID)).willReturn(Optional.of(List.of(
+                new MenuItem("m1", RID, "Classic Chicken Dum Biryani", new BigDecimal("299.00"), true)
+                        .withDetails("CHICKEN_BIRYANI", "Slow-cooked in a handi.", "NON_VEG", true, false,
+                                "classic-chicken-dum-biryani", 90),
+                new MenuItem("m2", RID, "Plain Item", new BigDecimal("10.00"), true))));
+
+        mvc.perform(get("/api/v1/restaurants/{id}/menu", RID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].category").value("CHICKEN_BIRYANI"))
+                .andExpect(jsonPath("$.items[0].description").value("Slow-cooked in a handi."))
+                .andExpect(jsonPath("$.items[0].diet").value("NON_VEG"))
+                .andExpect(jsonPath("$.items[0].bestseller").value(true))
+                .andExpect(jsonPath("$.items[0].chefSpecial").value(false))
+                .andExpect(jsonPath("$.items[0].imageKey").value("classic-chicken-dum-biryani"))
+                // An item without details keeps working: defaults, and nulls for what is not specified.
+                .andExpect(jsonPath("$.items[1].category").value("OTHER"))
+                .andExpect(jsonPath("$.items[1].diet").doesNotExist())
+                .andExpect(jsonPath("$.items[1].imageKey").doesNotExist())
+                .andExpect(jsonPath("$.items[1].sortOrder").doesNotExist());
+    }
+
+    @Test
     void notFoundIsProblemDetailWithFixedBodyForDetailAndMenu() throws Exception {
         given(catalog.findActiveRestaurant(anyString())).willReturn(Optional.empty());
         given(catalog.findMenuOfActiveRestaurant(anyString())).willReturn(Optional.empty());
@@ -84,7 +111,8 @@ class RestaurantControllerTest {
                     .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                     .andExpect(jsonPath("$.status").value(404))
                     .andExpect(jsonPath("$.title").value("Not Found"))
-                    .andExpect(jsonPath("$.detail").value("Restaurant not found."));
+                    .andExpect(jsonPath("$.detail").value("Restaurant not found."))
+                    .andExpect(jsonPath("$.code").value("RESTAURANT_NOT_FOUND"));
         }
     }
 }

@@ -41,6 +41,9 @@ class RestaurantApiIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    com.foodiehub.restaurant.domain.OwnerCatalog owners;
+
     private final HttpClient http = HttpClient.newHttpClient();
 
     private HttpResponse<String> get(String path) throws Exception {
@@ -61,7 +64,7 @@ class RestaurantApiIntegrationTest {
         HttpResponse<String> res = get("/api/v1/restaurants");
 
         assertThat(res.statusCode()).isEqualTo(200);
-        assertThat(res.body()).contains(DEMO).contains("FoodieHub Demo Kitchen")
+        assertThat(res.body()).contains(DEMO).contains("ZAYORA")
                 .doesNotContain(INACTIVE).doesNotContain("Closed Test Restaurant").doesNotContain("active");
     }
 
@@ -70,8 +73,36 @@ class RestaurantApiIntegrationTest {
         HttpResponse<String> res = get("/api/v1/restaurants/" + DEMO + "/menu");
 
         assertThat(res.statusCode()).isEqualTo(200);
-        assertThat(res.body()).contains("\"price\":129.50").contains("Gulab Jamun (2 pcs)")
-                .contains("\"available\":false").doesNotContain("Hidden Item");
+        assertThat(res.body()).contains("\"price\":1299.00").contains("\"price\":29.00")
+                .contains("Gulab Jamun (2 pcs)").contains("\"available\":false").doesNotContain("Hidden Item");
+    }
+
+    @Test
+    void seededZayoraMenuHasAllApprovedDishesInMenuOrderWithDetails() throws Exception {
+        HttpResponse<String> res = get("/api/v1/restaurants/" + DEMO + "/menu");
+        tools.jackson.databind.JsonNode items =
+                tools.jackson.databind.json.JsonMapper.builder().build().readTree(res.body()).get("items");
+
+        assertThat(items).hasSize(42); // DEC-014: the approved ZAYORA menu
+        assertThat(items.get(0).get("name").asString()).isEqualTo("Classic Veg Dum Biryani");
+        assertThat(items.get(0).get("category").asString()).isEqualTo("VEG_BIRYANI");
+        assertThat(items.get(0).get("diet").asString()).isEqualTo("VEG");
+        assertThat(items.get(0).get("bestseller").asBoolean()).isTrue();
+        assertThat(items.get(items.size() - 1).get("name").asString()).isEqualTo("Family Biryani Pack");
+        java.util.Set<String> diets = new java.util.HashSet<>();
+        int unavailable = 0;
+        for (tools.jackson.databind.JsonNode item : items) {
+            diets.add(item.get("diet").asString());
+            assertThat(item.get("imageKey").asString()).matches("[a-z0-9-]+");
+            assertThat(item.get("description").asString()).isNotBlank();
+            if (!item.get("available").asBoolean()) {
+                unavailable++;
+                assertThat(item.get("name").asString()).isEqualTo("Phirni");
+            }
+        }
+        assertThat(diets).containsExactlyInAnyOrder("VEG", "EGG", "NON_VEG");
+        assertThat(unavailable).isEqualTo(1);
+        assertThat(res.body()).doesNotContain("Masala Dosa");
     }
 
     @Test
@@ -89,4 +120,47 @@ class RestaurantApiIntegrationTest {
             assertThat(inactive.body()).doesNotContain("Closed Test Restaurant").doesNotContain("inactive");
         }
     }
+
+    // --- Owner operations against real MySQL (DEC-015) -------------------------------------------------------
+
+    private static final String LASSI = "00000000-0000-0000-0001-000000000036"; // Mango Lassi in the seed
+
+    @Test
+    void theSeededOwnerManagesZayoraAndNobodyElseDoes() {
+        assertThat(owners.ownedRestaurants("owner")).extracting(r -> r.getId()).containsExactly(DEMO);
+        assertThat(owners.ownedRestaurants("alice")).isEmpty();
+        assertThat(owners.menuOfOwnedRestaurant(DEMO, "owner")).get().asList().hasSize(42);
+        assertThat(owners.menuOfOwnedRestaurant(DEMO, "alice")).isEmpty();
+        assertThat(owners.menuOfOwnedRestaurant(INACTIVE, "owner")).isEmpty();
+    }
+
+    @Test
+    void anOwnerChangeIsStoredAndShownOnThePublicMenu() throws Exception {
+        String before = jdbc.queryForObject("SELECT CONCAT(price, '|', available) FROM menu_item WHERE id = ?", String.class, LASSI);
+        try {
+            var changes = new com.foodiehub.restaurant.domain.OwnerCatalog.MenuItemChanges(
+                    false, new java.math.BigDecimal("109.00"), null, null, null);
+            assertThat(owners.updateMenuItem(DEMO, LASSI, "owner", changes)).isPresent();
+
+            assertThat(jdbc.queryForObject("SELECT CONCAT(price, '|', available) FROM menu_item WHERE id = ?", String.class, LASSI))
+                    .isEqualTo("109.00|0");
+            String menu = get("/api/v1/restaurants/" + DEMO + "/menu").body();
+            assertThat(menu).contains("\"id\":\"" + LASSI + "\",\"name\":\"Mango Lassi\",\"price\":109.00,\"available\":false");
+        } finally {
+            String[] parts = before.split("\\|");
+            jdbc.update("UPDATE menu_item SET price = ?, available = ? WHERE id = ?", new java.math.BigDecimal(parts[0]),
+                    "1".equals(parts[1]), LASSI);
+        }
+    }
+
+    @Test
+    void anOwnerCannotChangeAnotherRestaurantsDish() {
+        var changes = new com.foodiehub.restaurant.domain.OwnerCatalog.MenuItemChanges(false, null, null, null, null);
+        // the inactive test restaurant's dish, via the owner's own restaurant id and via the other restaurant's id
+        assertThat(owners.updateMenuItem(DEMO, "00000000-0000-0000-0001-0000000000ff", "owner", changes)).isEmpty();
+        assertThat(owners.updateMenuItem(INACTIVE, "00000000-0000-0000-0001-0000000000ff", "owner", changes)).isEmpty();
+        assertThat(owners.updateMenuItem(DEMO, LASSI, "alice", changes)).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT available FROM menu_item WHERE id = ?", Boolean.class, LASSI)).isTrue();
+    }
 }
+

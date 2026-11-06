@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface MenuItemRepository extends JpaRepository<MenuItem, String> {
 
-    List<MenuItem> findAllByRestaurantIdOrderByNameAscIdAsc(String restaurantId);
+    List<MenuItem> findAllByRestaurantIdOrderBySortOrderAscNameAscIdAsc(String restaurantId);
 }
