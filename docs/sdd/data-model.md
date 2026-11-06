@@ -1,8 +1,8 @@
 # FoodieHub — Data Model
 
 **Status:** DRAFT  
-**Scope:** VS-1 (Vertical Slice 1)  
-**Decision baseline:** DEC-001–DEC-012  
+**Scope:** VS-1 (Vertical Slice 1) and the increment after it (DEC-014 – DEC-016)  
+**Decision baseline:** DEC-001–DEC-016 (DEC-013 – DEC-016 applied 2026-11-06)  
 **Purpose:** Describe the logical data model and proposed persistence structure for FoodieHub.
 
 ---
@@ -18,6 +18,15 @@ VS-1 supports (scope accepted by DEC-003; durable persistence in CP-3 and retrie
 - Server-side order validation and pricing.
 - Durable order persistence.
 - Order confirmation and retrieval.
+
+The increment after VS-1 adds (owner-decided, `clarification.md` §9.2):
+
+- Menu item details: category, description, diet, labels, image key, position (DEC-014).
+- The customer's own order list (DEC-014).
+- Restaurant owners linked to their restaurants, with menu edits and an owner order view (DEC-015).
+- The pickup order lifecycle with a status history (DEC-016).
+
+The implemented schema is `restaurant_db` V1–V3 and `order_db` V1–V2 (Flyway migrations in each service).
 
 The model distinguishes owner-approved decisions from proposed implementation details and unresolved decisions.
 
@@ -79,6 +88,13 @@ Represents an item belonging to one restaurant.
 | price | DECIMAL(10,2) | Menu price in INR |
 | available | Boolean | Whether the item is currently available |
 | restaurant_id | Identifier | Owning restaurant |
+| category | String (code) | Menu section, e.g. `CHICKEN_BIRYANI`; default `OTHER` (DEC-014) |
+| description | String (≤ 300), optional | One-line description (DEC-014) |
+| diet | `VEG` / `EGG` / `NON_VEG`, optional | Diet mark; null = not specified (DEC-014) |
+| bestseller | Boolean | Label chosen by the restaurant, not computed from sales (DEC-014) |
+| chef_special | Boolean | Label chosen by the restaurant (DEC-014) |
+| image_key | String, optional | Name of the dish photo used by the frontend (DEC-014) |
+| sort_order | Integer | Position within the menu (DEC-014) |
 
 **Owner-decided:**
 - Menu item attributes are `id`, `name`, `price`, `available`, and `restaurantId` (DEC-007).
@@ -88,6 +104,10 @@ Represents an item belonging to one restaurant.
 - Menu prices are in INR (DEC-007; BR-011).
 - Unavailable menu items remain visible and marked (DEC-008; DEC-009).
 - The server validates item availability during checkout (DEC-008; BR-004).
+- The menu carries category, description, diet, bestseller / chef-special labels and an image key (DEC-014); the
+  ZAYORA seed of 42 dishes and its prices (DEC-014).
+- The restaurant's owner may change `available`, `price`, `description`, `bestseller` and `chef_special` of their own
+  restaurant's dishes (DEC-015). Adding or removing dishes is not decided.
 
 **Proposed constraints:**
 - `id` is the primary key.
@@ -109,10 +129,15 @@ Represents a customer's submitted pickup order.
 | customer_id | String | Authenticated customer's stable identity |
 | restaurant_id | Identifier | **External reference** to the restaurant, which Restaurant Service owns; not a database foreign key |
 | fulfilment_type | String / enum | Pickup for VS-1 |
-| status | String / enum | Initial status is `PENDING_PAYMENT` |
-| subtotal | Exact decimal | Order subtotal; database precision/scale unresolved |
-| total | Exact decimal | Order total; database precision/scale unresolved |
-| created_at | Timestamp | Proposed order creation timestamp |
+| status | String / enum | `PENDING_PAYMENT` (initial), `ACCEPTED`, `REJECTED`, `PREPARING`, `READY_FOR_PICKUP`, `PICKED_UP` (DEC-011, DEC-016) |
+| currency | String | `INR` |
+| subtotal | DECIMAL(10,2) | Order subtotal, INR (DEC-013) |
+| total | DECIMAL(10,2) | Order total = subtotal, no tax or fees (DEC-013) |
+| created_at | Timestamp | Order creation timestamp |
+| idempotency_key, request_hash | String | Idempotent creation, unique per customer and key (DEC-006; details are an implementation proposal) |
+| status_updated_at | Timestamp, optional | When the status last changed (DEC-016) |
+| reject_reason | `SOLD_OUT` / `TOO_BUSY` / `CLOSING`, optional | Only for `REJECTED` (DEC-016; the list is a proposal) |
+| version | Integer | Optimistic locking for status changes (proposal) |
 
 **Owner-decided:**
 - Order creation requires authentication (DEC-003 for VS-1; DEC-009 for the MVP demo; RR-007; FR-011).
@@ -121,20 +146,24 @@ Represents a customer's submitted pickup order.
 - The initial order status is `PENDING_PAYMENT` (DEC-011).
 - The confirmation means the order was received and created (DEC-011).
 - Confirmation does not imply payment success or restaurant acceptance (DEC-011; DEC-003).
+- Order amounts are `DECIMAL(10,2)` in INR; line = price × quantity; total = sum of lines; no tax or fees (DEC-013).
+- Only the orderer can read an order; anyone else gets 404 (DEC-013, Q-24). The orderer can list their own orders (DEC-014).
+- Unpaid orders stay `PENDING_PAYMENT` with no automatic expiry; several are allowed per customer (DEC-013).
+- Lifecycle `PENDING_PAYMENT → ACCEPTED | REJECTED`, `ACCEPTED → PREPARING → READY_FOR_PICKUP → PICKED_UP`;
+  an accepted order is paid at the counter; only the owner of the order's restaurant changes the status (DEC-016).
+- Only users with the `CUSTOMER` role may create orders (DEC-015, Q-23).
 
 **Proposed:**
 - Generate a unique order identifier.
-- Associate the order with the authenticated customer's stable subject identifier from the identity provider (FR-032, PROPOSED [PENDING Q-24]; Q-25 recommended default: token `sub`).
+- Associate the order with the authenticated customer's stable subject identifier from the identity provider (FR-032; Q-25 recommended default: token `sub` — implemented).
 - Store the restaurant reference as an external identifier (no cross-service foreign key).
 - Store the order's monetary summary.
 
 **Not finalized:**
-- Order monetary precision and scale.
-- Rounding rules for order amounts.
-- Remaining order lifecycle transitions.
-- Development handling and accumulation/cleanup of unpaid orders (Q-28).
-- Ownership rule approval (Q-24).
-- Full order authorization and identity-mapping details.
+- Rounding rules: none approved; none needed for the approved formulas (DEC-013).
+- Customer cancellation, timeouts and automatic expiry; payment and refunds (DEC-016 "Not decided").
+- Long-term accumulation or cleanup of unpaid orders beyond VS-1 (OPEN-13 final policy).
+- Full order authorization and identity-mapping details beyond the rules above.
 
 Do not infer an expiry policy or automated cleanup mechanism.
 
@@ -176,6 +205,34 @@ The snapshots and exact persistence representation are proposed design choices, 
 
 The order's line-amount formula, total formula, validation limits, and monetary rounding behavior must be finalized through the specification decisions before implementation (BR-009, BR-010: PROPOSED [PENDING Q-20, A-3]; BR-007 business limit: OPEN; BR-008 technical bounds: Q-30; rounding: Q-14).
 
+### 3.5 RestaurantOwner (DEC-015)
+
+Links a signed-in owner to a restaurant they manage. Owned by Restaurant Service.
+
+| Attribute | Type | Description |
+|---|---|---|
+| restaurant_id | Identifier | The restaurant (foreign key, same service) |
+| owner_username | String | Keycloak username of the owner |
+
+**Owner-decided:** owners manage their own restaurants only; the demo user `owner` manages ZAYORA (DEC-015).
+**Proposed:** identifying the owner by username (an admin assigns owners later, US-09; switching to the immutable
+user ID is recommended then). Primary key (`restaurant_id`, `owner_username`).
+
+### 3.6 OrderStatusChange (DEC-016)
+
+Append-only history of order status changes. Owned by Order Service.
+
+| Attribute | Type | Description |
+|---|---|---|
+| id | Integer | Primary key |
+| order_id | Identifier | The order (foreign key, same service) |
+| from_status, to_status | String | The move |
+| changed_by | String | Keycloak username of the owner who made the change (not shown to customers) |
+| changed_at | Timestamp | When |
+| reason | String, optional | Reject reason |
+
+**Owner-decided:** the lifecycle itself (DEC-016). **Proposed:** keeping a history table and its columns.
+
 ## 4. Entity relationships
 
 **Within Restaurant Service** (database-enforced relationships are possible):
@@ -210,12 +267,26 @@ erDiagram
         boolean active
     }
 
+    RESTAURANT ||--o{ RESTAURANT_OWNER : "managed by"
+
     MENU_ITEM {
         string id PK
         string name
         decimal price
         boolean available
         string restaurant_id FK
+        string category
+        string description
+        string diet
+        boolean bestseller
+        boolean chef_special
+        string image_key
+        int sort_order
+    }
+
+    RESTAURANT_OWNER {
+        string restaurant_id FK
+        string owner_username "Keycloak username"
     }
 ```
 
@@ -224,6 +295,7 @@ erDiagram
 ```mermaid
 erDiagram
     CUSTOMER_ORDER ||--|{ ORDER_ITEM : contains
+    CUSTOMER_ORDER ||--o{ ORDER_STATUS_CHANGE : "history"
 
     CUSTOMER_ORDER {
         string id PK
@@ -234,6 +306,19 @@ erDiagram
         decimal subtotal
         decimal total
         timestamp created_at
+        timestamp status_updated_at
+        string reject_reason
+        long version
+    }
+
+    ORDER_STATUS_CHANGE {
+        long id PK
+        string order_id FK
+        string from_status
+        string to_status
+        string changed_by
+        timestamp changed_at
+        string reason
     }
 
     ORDER_ITEM {
@@ -257,12 +342,14 @@ Proposed ownership:
 
 - `Restaurant`
 - `MenuItem`
+- `RestaurantOwner` (DEC-015)
 
 Responsibilities:
 - Public restaurant browsing.
 - Public menu retrieval.
 - Active restaurant filtering.
 - Availability and authoritative menu-price information.
+- Owner endpoints: the owner's restaurants and menu edits (DEC-015); the source of truth for ownership.
 
 ### 6.2 Order Service
 
@@ -270,7 +357,8 @@ Proposed ownership:
 
 - `Order`
 - `OrderItem`
-- Future idempotency persistence, subject to the finalized design.
+- `OrderStatusChange` (DEC-016)
+- Idempotency data, stored on `Order` (`idempotency_key`, `request_hash`).
 
 Responsibilities:
 - Authenticated order creation.
@@ -278,9 +366,11 @@ Responsibilities:
 - Obtaining authoritative restaurant/menu data from Restaurant Service through the service-to-service interface, never by reading Restaurant Service tables. That interface is PROPOSED (Q-29: a synchronous internal call per D8 "Sync REST", authenticated service-to-service per SEC-005).
 - Server-side order pricing.
 - Durable order persistence.
-- Order retrieval and authorization.
+- Order retrieval and authorization; the customer's own order list (DEC-014).
+- The owner order view and status changes (DEC-015, DEC-016). Which restaurants an owner manages is asked of
+  Restaurant Service with the owner's token; Order Service stores no ownership data.
 
-Client-submitted prices are not trusted; the server determines prices (`spec.md` FR-022: PROPOSED [PENDING Q-20]). DEC-005 requires trusted pricing/availability integration in CP-3, which supports this direction but does not by itself approve FR-022.
+Client-submitted prices are not trusted; the server determines prices (FR-022, owner-decided by DEC-013).
 
 ### 6.3 Logical ownership vs physical deployment
 
@@ -325,11 +415,9 @@ The following fields are proposed:
 - `OrderItem.unit_price`
 - `OrderItem.line_amount`
 
-Their final database precision/scale and rounding behavior are not yet approved (Q-14; D6 recorded but unverified).
-
-DEC-012 applies to menu prices only.
-
-Do not automatically extend the menu-price decision to every order monetary column.
+**Finalized by DEC-013:** `DECIMAL(10,2)` in INR; line = price × quantity; total = sum of lines; no tax or fees. No
+rounding rule is approved, and none is needed for these formulas (a 2-decimal price × an integer quantity, and sums
+of such amounts, are exact). Status changes never change any amount (DEC-016).
 
 ## 8. Security and privacy considerations
 
@@ -345,7 +433,9 @@ Do not automatically extend the menu-price decision to every order monetary colu
 
 ## 9. Seed data
 
-VS-1 includes exactly one seeded restaurant (DEC-003).
+VS-1 includes exactly one seeded restaurant (DEC-003). Since DEC-014 it is **ZAYORA** with the approved 42-dish menu,
+prices and labels; Phirni is seeded as unavailable for demonstration. The dev seed also links the demo user `owner` to
+ZAYORA (DEC-015). The seed is re-applied only when its file changes, and then resets the demo menu.
 
 The seeded restaurant should be active and have seeded menu items. (Seeded restaurant and menu: DEC-003. That the seeded restaurant is active is a test precondition of VS1-AC1, not an owner decision.)
 
@@ -359,16 +449,14 @@ Proposed: seed identifiers should be deterministic where practical to simplify r
 
 | Item | Impact |
 |---|---|
-| Q-14 remaining order monetary decisions | Final order monetary schema and rounding |
-| Q-20 remaining validation decisions | Checkout validation constraints |
-| Q-24 | Order ownership and authorization rule |
-| Q-28 | Development handling of unpaid orders |
+| ~~Q-14 order money, Q-20 validation set, Q-24, Q-28, Q-29, Q-30~~ | Decided by DEC-013 (except the business quantity limit BR-007 and payload size) |
+| ~~Q-23 who may order~~ | Decided by DEC-015: `CUSTOMER` role only |
+| Order lifecycle beyond VS-1 | Decided by DEC-016; cancellation, expiry, payment and refunds remain open |
 | A-3 | No-tax/no-coupons assumption |
 | Unavailable-item cart rule | Client cart behavior |
 | Idempotency details | Persistence, concurrency, and retry behavior |
-| Q-25 / OPEN-13 | Related pending CP-3 design requirements |
-| Q-30 | Technical request-safety bounds |
-| Q-29 | Service-to-service interface for authoritative prices and availability (§6.2) |
+| Q-25 / OPEN-13 (final policy) | Persisted fields beyond the implementation; unpaid-order policy beyond VS-1 |
+| SEC-005 | Authenticating the internal price lookup (not implemented) |
 | `menu_item_id` reference strategy; deletion and retention policy | Historical-reference handling — not finalized (§3.4) |
 | Price or availability change between lookup and commit | Consistency window at checkout — open issue (§6.4) |
 
@@ -376,9 +464,11 @@ These items must be resolved at their specified decision gates before the corres
 
 ## 11. Implementation readiness
 
-This document is a logical planning draft.
+This document is a logical planning draft. **Implemented (2026-11-06):** `restaurant_db` V1–V3 and `order_db` V1–V2
+match §3 – §7 as updated for DEC-013 – DEC-016; the items below were resolved by DEC-013 except where §10 still lists
+them as open.
 
-It is not sufficient by itself to finalize database migrations or production schema design.
+It is not sufficient by itself to finalize production schema design.
 
 Before CP-3:
 - Finalize order monetary precision and scale.

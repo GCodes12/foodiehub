@@ -51,6 +51,14 @@ Select text to add comments on the plan
 > take precedence over this plan for VS-1. DEC-013 settles the checkout validation set, technical bounds (≤ 20 lines, quantity 1–50),
 > order money (`DECIMAL(10,2)` INR, no tax or fees), owner-only order reads (404 otherwise), the internal REST price lookup, and
 > VS-1 unpaid-order handling (stay `PENDING_PAYMENT`, no automatic expiry, several per customer). The rest of this plan is unchanged.
+>
+> **Implementation status note (2026-11-06):** DEC-014 – DEC-016 (`clarification.md` §9.2; requirements in `spec.md` §16)
+> brought parts of later milestones forward, in reduced form: the customer order list (US-04, list only), owner menu
+> edits (part of US-06: availability, price, description, labels — no adding or removing dishes) and the restaurant
+> workflow (US-07: accept / reject / preparing / ready / picked up, paid at the counter). Roles `CUSTOMER` and
+> `RESTAURANT_OWNER` exist; the administrator role and US-09 do not. Payment (M3), notifications (US-08), delivery
+> (US-10), cancellation (US-05) and the gateway are unchanged and not started. The customer frontend is branded
+> ZAYORA. The milestone definitions below are otherwise unchanged.
 
 ### Part B — safe to keep OPEN until its gate (must be answered before that milestone starts; suggested values are not adopted until answered)
 

@@ -3,10 +3,31 @@
 FoodieHub is a food-ordering platform built as a **learning and portfolio project**. It is a
 hands-on way to practise microservice design, OAuth2/OIDC security, and Spec-Driven Development (SDD).
 
-> **Status: VS-1, CP-1 – CP-5 working locally.** The customer web app is branded **ZAYORA** ("Where hunger meets
-> flavours."), an Indian restaurant with biryani as its signature (DEC-014). Browse the 42-dish menu, sign in with
-> Keycloak, check out a pickup order, and see it in My Orders. It runs locally against MySQL. **No payment is
-> taken**: every order stays `PENDING_PAYMENT`. The gateway is not built yet (the Vite dev proxy stands in for it).
+> **Status: working locally.** The customer web app is branded **ZAYORA** ("Where hunger meets flavours."), an
+> Indian restaurant with biryani as its signature (DEC-014). Customers browse the 42-dish menu, sign in with Keycloak,
+> check out a pickup order and follow it live; the restaurant owner manages the menu and moves orders through
+> Accepted → Preparing → Ready → Picked up (DEC-015, DEC-016). It runs locally against MySQL. **No online payment**:
+> an accepted order is paid at the counter. The gateway is not built yet (the Vite dev proxy stands in for it).
+
+| Home | Menu | Dish detail |
+|---|---|---|
+| ![ZAYORA home page](docs/screenshots/home.jpg) | ![Menu filtered to chicken biryani](docs/screenshots/menu.jpg) | ![Dish detail view](docs/screenshots/dish.jpg) |
+
+### Demo in five minutes
+
+Start everything as in the setup steps below (MySQL, Keycloak, both services with the `dev` profile, `npm run dev`).
+Use two browser windows — a normal one and a private one — so the customer and the owner are signed in at the same time.
+All demo passwords are `FOODIEHUB_DEMO_USER_PASSWORD` from `.env`.
+
+1. **Customer** (`alice`): open http://localhost:5173, *Explore Our Menu*, filter **Vegetarian** or open a dish, add
+   two dishes, open the cart, *Proceed to checkout* → log in → *Place pickup order*. The confirmation shows the
+   server's prices and **Waiting for the restaurant**.
+2. **Owner** (`owner`, private window): *Kitchen* → **Orders**. The new order is highlighted; click **Accept**.
+3. **Customer**: within 20 seconds the tracker shows **Accepted** and "Pay at the counter when you collect".
+4. **Owner**: *Start preparing* → *Mark ready* → *Picked up*. The customer's tracker follows each step with its time.
+5. **Owner**, *Menu* tab: switch **Phirni** to available or change a price → the customer's menu shows it on reload.
+6. Try the rules: the owner can't check out (customer accounts only); a second *Accept* on the same order is refused;
+   *Reject* asks for an optional reason that the customer then sees.
 
 ## Planned MVP scope
 

@@ -5,9 +5,10 @@
 > [`clarification.md`](clarification.md) §9.2. **No recommendation from `clarification.md` §9.1 is approved by this
 > document.** Requirements that depend on pending answers are marked **[PENDING …]** and become binding only when that
 > answer is recorded. Owner decisions **DEC-001 – DEC-013** (`clarification.md` §9.2) are now reflected; the
-> remaining G-SPEC items are still open.
+> remaining G-SPEC items are still open. **DEC-014 – DEC-016** (ZAYORA menu, roles and owner slice, order lifecycle)
+> extend the implementation beyond VS-1; their requirements are in **§16**, and §3, §9, §13 and §14.3 point to it.
 >
-> Created: 2026-11-04 · Revised: 2026-11-04 (two consistency reviews; owner decisions DEC-001 – DEC-012 applied); 2026-11-05 (DEC-013 applied) · Sources: [`raw-requirement.md`](raw-requirement.md) (sha1 `1514270…`),
+> Created: 2026-11-04 · Revised: 2026-11-04 (two consistency reviews; owner decisions DEC-001 – DEC-012 applied); 2026-11-05 (DEC-013 applied); 2026-11-06 (DEC-014 – DEC-016 added as §16) · Sources: [`raw-requirement.md`](raw-requirement.md) (sha1 `1514270…`),
 > [`clarification.md`](clarification.md) (sha1 `4ceecce…`), [`plan.md`](plan.md) (sha1 `1a0cbd3…`)
 > This document does not change `plan.md`. Per **DEC-001**, M1 is approved as defined and M2 is delivered incrementally;
 > per **DEC-002**, CP-1 = M1 and CP-2 – CP-5 are the first increment of M2 (D10 unchanged). `plan.md` itself still shows
@@ -65,8 +66,8 @@ All IDs are stable and defined only in this document. External IDs are reference
 | Actor | Description | Permissions in VS-1 | Basis |
 |---|---|---|---|
 | Visitor | Anonymous person using the frontend | View the restaurant and its menu (read-only). No order actions | OWNER-DECIDED (DEC-009: public, read-only browsing; MVP demo scope); RR-007 CONFIRMED (no order management for unauthenticated users) |
-| Signed-in user (orderer) | A user authenticated through Keycloak | Place an order; view **only their own** orders | Authentication: RR-007 CONFIRMED. Who may order: PROPOSED [PENDING Q-23]. Ownership rule: OWNER-DECIDED (DEC-013) |
-| Restaurant owner, administrator | — | **Not active in VS-1.** The restaurant and menu are seeded data | RR-107 role set: approval unclear (Q-02) |
+| Signed-in user (orderer) | A user authenticated through Keycloak | Place an order; view **only their own** orders | Authentication: RR-007 CONFIRMED. Who may order: OWNER-DECIDED — `CUSTOMER` role only (DEC-015, Q-23; §16). Ownership rule: OWNER-DECIDED (DEC-013) |
+| Restaurant owner, administrator | — | **Not active in VS-1.** The restaurant and menu are seeded data. *After VS-1:* the restaurant owner role exists (§16, DEC-015); the administrator is still not active | RR-107 role set: approval unclear (Q-02); owner role OWNER-DECIDED (DEC-015) |
 | restaurant-service, order-service | System components | order-service obtains authoritative menu data from restaurant-service over an internal REST call (DEC-013, Q-29); authenticating that call is PROPOSED (SEC-005) | TC-11 topic CONFIRMED; call OWNER-DECIDED (DEC-013) |
 
 ## 4. User workflows
@@ -155,7 +156,7 @@ Overlapping requirements, each tested once: FR-003 ≡ SEC-006 · FR-011 ⊂ SEC
 ## 9. Order lifecycle and unpaid-order behaviour
 
 - **Initial state only:** a new order is `PENDING_PAYMENT` (DEC-011; decides only the initial-state part of Q-03). VS-1 defines **no
-  transitions**. The rest of the RR-102 lifecycle stays PROPOSED and outside this specification.
+  transitions**; the transitions added after VS-1 are in §16.3 (DEC-016). The rest of the RR-102 lifecycle stays PROPOSED and outside this specification.
 - **Meaning:** "order received" = durably received and created. It does **not** mean that payment succeeded or that the restaurant has accepted the order, and no real payment processing is implied (DEC-011; FR-050).
 - **Temporary, development-only behaviour** [Q-28 decided by DEC-013; usage scope decided by DEC-004 — local development and portfolio demos, payment labelled unavailable, no production]: unpaid orders stay `PENDING_PAYMENT`; there is no automated
   expiry, cancellation or cleanup; developers may reset their local database. This is **not** a production policy.
@@ -220,7 +221,9 @@ The precise HTTP status for validation errors is left to `api-contract.md`; it i
 
 ## 13. Out of scope (VS-1)
 - Simulated payment, the payment deadline and expiry automation (the payment increment).
-- Cancellation, restaurant workflow (accept/reject/prepare), notifications and the order list.
+- Cancellation, restaurant workflow (accept/reject/prepare), notifications and the order list. *(After VS-1, the order
+  list, the restaurant workflow and owner menu edits were added by DEC-014 – DEC-016, §16; cancellation and
+  notifications remain out of scope.)*
 - Admin functions, restaurant or menu management, and multiple restaurants.
 - Self-delivery and all delivery rules (A-8, OPEN-11, OPEN-19), the price-change check (Q-21) and minimum order value (OPEN-12).
 - Consul, Jenkins/SonarQube as a gate, and browser E2E tests.
@@ -270,6 +273,10 @@ The recommended defaults are listed in `clarification.md` §9.1. Those not cover
 - **DEC-011** (`clarification.md` §9.2): initial order status `PENDING_PAYMENT`; a confirmation means durably received and created, not payment success or restaurant acceptance; no real payment processing; approved wording "Order received — payment pending; not yet accepted by the restaurant." Decides only the initial-state part of Q-03.
 - **DEC-012** (`clarification.md` §9.2): menu prices in INR use `DECIMAL(10,2)` as the final database representation. Does not approve the remaining D6 decisions on order monetary fields or rounding.
 - **DEC-013** (`clarification.md` §9.2): checkout validation set (Q-20, except the business quantity limit); technical bounds of at most 20 lines and quantity 1–50 per line (Q-30); order amounts `DECIMAL(10,2)` in INR, line = price × quantity, total = sum, no tax or fees (Q-14 order money); only the orderer can view an order, others get 404 (Q-24); internal REST price lookup (Q-29); unpaid orders stay `PENDING_PAYMENT` with no automatic expiry or deletion, several allowed per customer (Q-28, OPEN-13 for VS-1).
+
+- **DEC-014 – DEC-016** (`clarification.md` §9.2): ZAYORA brand, menu details and the 42-dish seed, the customer's
+  own order list (DEC-014); roles `CUSTOMER` / `RESTAURANT_OWNER`, the owner slice and Q-23 (DEC-015); the pickup
+  order lifecycle with pay-at-counter acceptance, a final Picked-up step and optional reject reasons (DEC-016). See §16.
 
 These are recorded owner decisions (D8–D11 are owner selections whose wording was written by the assistant; A-10 – A-12 conflict
 with line 29 of `plan.md`, Q-13). **No other decision is treated as approved.**
@@ -330,3 +337,59 @@ with line 29 of `plan.md`, Q-13). **No other decision is treated as approved.**
 | SEC-008 | DEC-010 | Q-06 (DEC-010) | AC1 | CP-1 |
 | NFR-001 | TC-05, TC-06 | — | AC9 | CP-5 |
 | NFR-002 | TC-12 | Q-26 | AC9 | all |
+
+---
+
+## 16. After VS-1: menu details, roles and order lifecycle (DEC-014 – DEC-016)
+
+This section adds the requirements decided on 2026-11-06. It does not change §1 – §15 except where they point here,
+and it does not approve any open item listed in §14. Basis labels as in §2.1; "PROPOSED" marks implementation choices
+recorded with the decision but not approved by the owner.
+
+### 16.1 Menu and order list (DEC-014)
+
+| ID | Requirement | Basis |
+|---|---|---|
+| FR-101 | Each menu item carries a category code, an optional description (≤ 300 characters), an optional diet (`VEG`, `EGG`, `NON_VEG`), bestseller and chef-special labels, an optional image key and a menu position; the public menu returns them in menu order. | OWNER-DECIDED (DEC-014) |
+| FR-102 | The demo restaurant is ZAYORA with the 42 dishes, prices and labels approved on 2026-11-06. | OWNER-DECIDED (DEC-014) |
+| FR-103 | `GET /api/v1/orders` returns the signed-in user's own orders, newest first; never another user's. | OWNER-DECIDED (DEC-014); ownership as DEC-013 |
+| FR-104 | No pagination or filtering of the order list. | Not decided (DEC-014 "Not decided") |
+
+### 16.2 Roles and the owner slice (DEC-015)
+
+| ID | Requirement | Basis |
+|---|---|---|
+| SEC-101 | Keycloak realm roles `CUSTOMER` and `RESTAURANT_OWNER`. Only `CUSTOMER` may create orders (Q-23); others get 403. | OWNER-DECIDED (DEC-015) |
+| FR-110 | An owner sees the restaurants they manage and their full menu. | OWNER-DECIDED (DEC-015) |
+| FR-111 | An owner may mark a dish of their own restaurant available or sold out and change its price, description and labels; customers see the change on the next menu load. Price rules as DEC-012 (INR, `DECIMAL(10,2)`, > 0). | OWNER-DECIDED (DEC-015); "> 0" PROPOSED |
+| FR-112 | An owner sees the orders placed at their restaurants, newest first, without customer identities. | OWNER-DECIDED (DEC-015); "without identities" PROPOSED |
+| SEC-102 | Another restaurant's data answers 404, never revealing ownership. Owner endpoints need the `RESTAURANT_OWNER` role (403 otherwise) and a token issued for the service. | PROPOSED (DEC-015 implementation choices) |
+| SEC-103 | Ownership is stored in Restaurant Service (owner linked by Keycloak username); Order Service asks it with the caller's token. | PROPOSED (DEC-015 implementation choices) |
+
+### 16.3 Order lifecycle (DEC-016)
+
+| ID | Requirement | Basis |
+|---|---|---|
+| FR-120 | Allowed moves: `PENDING_PAYMENT → ACCEPTED`, `PENDING_PAYMENT → REJECTED`, `ACCEPTED → PREPARING`, `PREPARING → READY_FOR_PICKUP`, `READY_FOR_PICKUP → PICKED_UP`. `REJECTED` and `PICKED_UP` are final. | OWNER-DECIDED (DEC-016) |
+| FR-121 | An unpaid order may be accepted; the customer pays at the counter on pickup. Nothing is recorded as paid. | OWNER-DECIDED (DEC-016) |
+| FR-122 | A rejection may carry one optional reason, shown to the customer: `SOLD_OUT`, `TOO_BUSY`, `CLOSING`. | Optional reason OWNER-DECIDED (DEC-016); the list PROPOSED |
+| FR-123 | Only the owner of the order's restaurant changes its status; the order total never changes. | OWNER-DECIDED (DEC-016) |
+| FR-124 | The customer sees the current status and the time of each step; the page refreshes while the order is in progress. | Seeing updates OWNER-DECIDED (DEC-016); polling PROPOSED |
+| BR-101 | A skipped step, a reason on a non-rejection, or a change based on an out-of-date status is refused (409); the request states the status the owner saw. | PROPOSED (DEC-016 implementation choices) |
+| BR-102 | Every status change is recorded: who, when, from, to, reason. Customers never see who made it. | PROPOSED |
+
+### 16.4 Still open after DEC-016
+
+Customer cancellation; timeouts or automatic expiry; payment and refunds; notifications; adding or removing dishes;
+the administrator role (US-09); multiple restaurants; the business quantity limit (BR-007); SEC-005.
+
+### 16.5 Traceability
+
+| Req | Decision | Implemented in | Tests |
+|---|---|---|---|
+| FR-101, FR-102 | DEC-014 | restaurant-service V2 migration, seed, `MenuResponse` | `RestaurantControllerTest`, `RestaurantApiIntegrationTest` |
+| FR-103 | DEC-014 | order-service `GET /api/v1/orders` | `OrderApiIntegrationTest` |
+| SEC-101 | DEC-015 | both services' `SecurityConfig`, Keycloak realm | `JwtValidationTest`, `OrderApiIntegrationTest`, `OwnerControllerTest` |
+| FR-110 – FR-112, SEC-102, SEC-103 | DEC-015 | `OwnerController`, `OwnerOrderController`, V3 migration | `OwnerControllerTest`, `RestaurantApiIntegrationTest`, `OrderApiIntegrationTest` |
+| FR-120 – FR-124, BR-101, BR-102 | DEC-016 | order-service V2 migration, `OrderLifecycle`, Kitchen and order pages | `OrderStatusTest`, `OrderApiIntegrationTest`, frontend `orderStatus.test.ts`, `Owner.test.tsx`, `OrderDetails.test.tsx` |
+
