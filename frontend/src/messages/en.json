@@ -175,6 +175,35 @@
     },
     "removeFilter": "Remove filter: {name}"
   },
+  "menuViews": {
+    "label": "Choose a menu",
+    "homeTitle": "Veg or non-veg? Pick your menu",
+    "homeSubtitle": "Every dish is clearly marked. Jump straight to the food you eat.",
+    "open_one": "Open the menu · {count} dish",
+    "open_other": "Open the menu · {count} dishes",
+    "ALL": {
+      "title": "Full menu",
+      "count_one": "{count} dish",
+      "count_other": "{count} dishes",
+      "note": "Everything we cook"
+    },
+    "VEG": {
+      "title": "Veg menu",
+      "kicker": "100% vegetarian",
+      "count_one": "{count} vegetarian dish",
+      "count_other": "{count} vegetarian dishes",
+      "note": "Paneer, veg biryanis, sides & sweets",
+      "description": "Dum-cooked veg and paneer biryanis, tandoori paneer, dal makhani, raitas, desserts and lassis — nothing with meat or egg."
+    },
+    "NON_VEG": {
+      "title": "Non-veg menu",
+      "kicker": "Chicken · Mutton · Egg",
+      "count_one": "{count} non-veg dish",
+      "count_other": "{count} non-veg dishes",
+      "note": "Chicken, mutton & egg + sides",
+      "description": "Hyderabadi chicken and mutton biryanis, egg biryanis, kebabs, curries and combos — with the raitas, desserts and drinks that go with them."
+    }
+  },
   "cart": {
     "metaTitle": "Your cart",
     "title": "Your cart",

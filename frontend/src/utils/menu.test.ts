@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { MenuItem } from '../types/api.ts';
 import {
-  categoriesOf, categoryName, filterItems, groupByCategory, hasDietData, homeSelections, lowestPrice, NO_FILTERS, sortItems,
+  categoriesOf, categoryName, filterItems, groupByCategory, hasDietData, homeSelections, itemsInView, lowestPrice, NO_FILTERS,
+  PAIRING_CATEGORIES, sortItems, viewDishCount, viewHighlights,
 } from './menu.ts';
 
 function item(id: string, over: Partial<MenuItem> = {}): MenuItem {
@@ -94,5 +95,29 @@ describe('menu browsing', () => {
     assert.equal(hasDietData(MENU), true);
     assert.equal(hasDietData(MENU.map((i) => ({ ...i, diet: null }))), false);
   });
-});
 
+  it('menu views: veg = veg only; non-veg = non-veg and egg dishes plus veg sides, desserts and drinks', () => {
+    const veg = itemsInView(MENU, 'VEG');
+    assert.ok(veg.every((i) => i.diet === 'VEG'));
+    const nonVeg = itemsInView(MENU, 'NON_VEG');
+    assert.ok(nonVeg.some((i) => i.diet === 'EGG'));
+    assert.ok(nonVeg.every((i) => i.diet !== 'VEG' || PAIRING_CATEGORIES.has(i.category)));
+    assert.ok(!nonVeg.some((i) => i.id === 'veg-dum'));
+    assert.equal(itemsInView(MENU, 'ALL').length, MENU.length);
+    assert.equal(viewDishCount(MENU, 'NON_VEG'), MENU.filter((i) => i.diet === 'NON_VEG' || i.diet === 'EGG').length);
+  });
+
+  it('menu view combines with the other filters', () => {
+    const nonVegBiryani = filterItems(MENU, { ...NO_FILTERS, view: 'NON_VEG', query: 'biryani' });
+    assert.ok(nonVegBiryani.length > 0);
+    assert.ok(nonVegBiryani.every((i) => i.diet !== 'VEG'));
+  });
+
+  it('view highlights pick one dish per category, labelled dishes first, never a side', () => {
+    const picks = viewHighlights(MENU, 'NON_VEG');
+    assert.ok(picks.length <= 3);
+    assert.equal(new Set(picks.map((i) => i.category)).size, picks.length);
+    assert.ok(picks[0].bestseller || picks[0].chefSpecial);
+    assert.ok(picks.every((i) => !PAIRING_CATEGORIES.has(i.category)));
+  });
+});

@@ -6,19 +6,20 @@ import { Logo } from '../components/common/Logo.tsx';
 import { SectionHeader } from '../components/common/SectionHeader.tsx';
 import { CategoryTiles } from '../components/menu/CategoryTiles.tsx';
 import { DishList } from '../components/menu/DishList.tsx';
+import { MenuViewCards } from '../components/menu/MenuViews.tsx';
 import { useMenu } from '../hooks/useMenu.ts';
 import { usePageMeta } from '../hooks/usePageMeta.ts';
 import type { MenuItem } from '../types/api.ts';
 import { images } from '../utils/images.ts';
 import { t } from '../utils/i18n.ts';
-import { homeSelections } from '../utils/menu.ts';
+import { hasDietData, homeSelections } from '../utils/menu.ts';
 import { paths } from '../utils/paths.ts';
 
 const ROWS: { field: keyof ReturnType<typeof homeSelections>; title: string; subtitle: string; id: string; viewAll: string }[] = [
   { field: 'signature', title: 'home.signatureTitle', subtitle: 'home.signatureSubtitle', id: 'signature', viewAll: paths.menu({ label: 'SIGNATURE' }) },
   { field: 'bestsellers', title: 'home.bestsellersTitle', subtitle: 'home.bestsellersSubtitle', id: 'bestsellers', viewAll: paths.menu({ label: 'BESTSELLER' }) },
-  { field: 'vegFavourites', title: 'home.vegTitle', subtitle: 'home.vegSubtitle', id: 'veg', viewAll: paths.menu({ diet: 'VEG' }) },
-  { field: 'nonVegFavourites', title: 'home.nonVegTitle', subtitle: 'home.nonVegSubtitle', id: 'non-veg', viewAll: paths.menu({ diet: 'NON_VEG' }) },
+  { field: 'vegFavourites', title: 'home.vegTitle', subtitle: 'home.vegSubtitle', id: 'veg', viewAll: paths.menu({ menu: 'veg' }) },
+  { field: 'nonVegFavourites', title: 'home.nonVegTitle', subtitle: 'home.nonVegSubtitle', id: 'non-veg', viewAll: paths.menu({ menu: 'non-veg' }) },
   { field: 'startersAndSides', title: 'home.sidesTitle', subtitle: 'home.sidesSubtitle', id: 'sides', viewAll: paths.menu({ category: 'STARTERS' }) },
   { field: 'combos', title: 'home.combosTitle', subtitle: 'home.combosSubtitle', id: 'combos', viewAll: paths.menu({ category: 'COMBOS' }) },
 ];
@@ -63,6 +64,13 @@ export function HomePage() {
 
       {menu.status === 'error' && (
         <div className="container section"><ErrorMessage error={menu.error} onRetry={menu.reload} /></div>
+      )}
+
+      {menu.status === 'ready' && hasDietData(menu.data.items) && (
+        <section className="container section menu-views-section" aria-labelledby="choose-menu">
+          <SectionHeader id="choose-menu" title={t('menuViews.homeTitle')} subtitle={t('menuViews.homeSubtitle')} />
+          <MenuViewCards items={menu.data.items} />
+        </section>
       )}
 
       <section className="container section" aria-labelledby="categories">

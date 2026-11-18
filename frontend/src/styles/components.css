@@ -1003,5 +1003,6 @@
 }
 
 .category-tile-art svg.dish-art {
-  transform: scale(1.35);
+  transform: scale(1.7);
+  transform-origin: 50% 46%; /* frame the food, not the pot */
 }

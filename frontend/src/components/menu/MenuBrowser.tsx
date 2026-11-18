@@ -1,10 +1,11 @@
 import { SearchX } from 'lucide-react';
 import type { MenuItem } from '../../types/api.ts';
 import { t } from '../../utils/i18n.ts';
-import { categoriesOf, categoryBlurb, categoryName, filterItems, groupByCategory, hasDietData, NO_FILTERS, sortItems } from '../../utils/menu.ts';
-import type { MenuFilters, SortMode } from '../../utils/menu.ts';
+import { categoriesOf, categoryBlurb, categoryName, filterItems, groupByCategory, hasDietData, itemsInView, NO_FILTERS, sortItems } from '../../utils/menu.ts';
+import type { MenuFilters, MenuView, SortMode } from '../../utils/menu.ts';
 import { DishList } from './DishList.tsx';
 import { MenuToolbar } from './MenuToolbar.tsx';
+import { MenuViewSwitcher } from './MenuViews.tsx';
 
 interface Props {
   items: MenuItem[];
@@ -16,13 +17,22 @@ interface Props {
   onOpen: (item: MenuItem) => void;
 }
 
-/** The menu: toolbar, then dishes grouped by category (or one flat list when sorted by price). */
+/** The menu: veg / non-veg / full menu switch, toolbar, then dishes grouped by category (or one flat list when sorted by price). */
 export function MenuBrowser({ items, restaurantId, filters, sort, onFilters, onSort, onOpen }: Props) {
+  const view = filters.view ?? 'ALL';
   const visible = sortItems(filterItems(items, filters), sort);
   const grouped = sort === 'RECOMMENDED';
+  const categories = categoriesOf(itemsInView(items, view)); // no "Chicken Biryani" chip in the veg menu
+
+  function changeView(next: MenuView) {
+    const keepCategory = filters.category !== null && categoriesOf(itemsInView(items, next)).includes(filters.category);
+    onFilters({ ...filters, view: next, category: keepCategory ? filters.category : null });
+  }
+
   return (
     <>
-      <MenuToolbar categories={categoriesOf(items)} showDiet={hasDietData(items)} filters={filters} sort={sort} onFilters={onFilters} onSort={onSort} />
+      {hasDietData(items) && <MenuViewSwitcher items={items} view={view} onChange={changeView} />}
+      <MenuToolbar categories={categories} filters={filters} sort={sort} onFilters={onFilters} onSort={onSort} />
       <p className="result-count" aria-live="polite">{t('menu.resultCount', { count: visible.length })}</p>
       {visible.length === 0 ? (
         <div className="no-results">

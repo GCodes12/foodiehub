@@ -1840,3 +1840,261 @@
   padding: 0;
   border: none;
 }
+
+/* ---------- Veg / non-veg menus (menu page switcher + home cards) ---------- */
+.menu-view-veg { --view: var(--color-veg); --view-soft: #e8f5ec; --view-deep: #0f3b22; --view-mid: #1d6a3b; }
+.menu-view-non-veg { --view: var(--color-nonveg); --view-soft: #fbeae6; --view-deep: #3b0d12; --view-mid: #8a2418; }
+.menu-view-all { --view: var(--burgundy); --view-soft: var(--gold-soft); --view-deep: var(--burgundy); --view-mid: var(--burgundy-80); }
+
+.menu-views {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: var(--space-4);
+}
+
+.menu-view {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4) var(--space-3) var(--space-3);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--charcoal);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s, background-color 0.2s;
+}
+
+.menu-view:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--view) 45%, var(--color-border));
+  box-shadow: var(--shadow-md);
+}
+
+.menu-view.is-active {
+  border-color: var(--view);
+  background: linear-gradient(120deg, var(--view-soft), var(--color-surface) 75%);
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--view) 18%, transparent);
+}
+
+.menu-view-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.menu-view-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--view);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.menu-view-count {
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.menu-view-note {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-view-check {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--view);
+  color: var(--white);
+}
+
+/* Overlapping round "plates" of the view's signature dishes. */
+.menu-view-collage {
+  display: flex;
+  flex: none;
+  --plate: 52px;
+}
+
+.menu-view-plate {
+  overflow: hidden;
+  width: var(--plate);
+  height: var(--plate);
+  border-radius: 50%;
+  background: var(--ivory-deep);
+  box-shadow: 0 0 0 3px var(--color-surface), 0 6px 14px rgb(50 19 25 / 22%);
+}
+
+.menu-view-plate + .menu-view-plate {
+  margin-left: calc(var(--plate) * -0.38);
+}
+
+.menu-view-plate .dish-image {
+  transform: scale(1.75);
+  transform-origin: 50% 46%; /* frame the food, not the pot */
+}
+
+.menu-view-plate img.dish-image {
+  transform: none;
+}
+
+@media (max-width: 899px) {
+  .menu-views {
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
+  }
+  .menu-view {
+    padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
+  }
+  .menu-view-collage {
+    --plate: 42px;
+  }
+}
+
+/* Home: two big entry cards. */
+.menu-view-cards {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menu-view-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  overflow: hidden;
+  height: 100%;
+  min-height: 230px;
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  background:
+    radial-gradient(circle at 85% 50%, color-mix(in srgb, var(--view-mid) 70%, transparent), transparent 60%),
+    linear-gradient(135deg, var(--view-deep), var(--view-mid));
+  color: var(--ivory);
+  text-decoration: none;
+  box-shadow: var(--shadow-md);
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+
+/* Fine gold pattern, like a menu card's border. */
+.menu-view-card::before {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgb(236 195 111 / 35%);
+  border-radius: calc(var(--radius-xl) - 8px);
+  pointer-events: none;
+}
+
+.menu-view-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.menu-view-card-text {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  max-width: 300px;
+}
+
+.menu-view-card-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 4px 10px 4px 6px;
+  border-radius: var(--radius-full);
+  background: rgb(255 255 255 / 92%);
+  color: var(--view);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.menu-view-card-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  white-space: nowrap;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.menu-view-card-desc {
+  color: rgb(247 240 229 / 82%);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.menu-view-card-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-top: var(--space-2);
+  padding: 10px 18px;
+  border-radius: var(--radius-full);
+  background: var(--gold);
+  color: var(--burgundy);
+  font-size: var(--text-sm);
+  font-weight: 800;
+  transition: gap 0.2s;
+}
+
+.menu-view-card:hover .menu-view-card-cta {
+  gap: 12px;
+}
+
+.menu-view-card .menu-view-collage {
+  --plate: 112px;
+  position: relative;
+  flex-direction: column;
+  align-items: center;
+}
+
+.menu-view-card .menu-view-plate {
+  box-shadow: 0 0 0 4px var(--gold-light), 0 14px 30px rgb(0 0 0 / 40%);
+}
+
+.menu-view-card .menu-view-plate + .menu-view-plate {
+  margin-left: 0;
+  margin-top: calc(var(--plate) * -0.3);
+}
+
+.menu-view-card .menu-view-plate:nth-child(2) {
+  transform: translateX(-46%);
+}
+
+.menu-view-card .menu-view-plate:nth-child(3) {
+  transform: translateX(10%);
+}
+
+@media (max-width: 599px) {
+  .menu-view-card {
+    padding: var(--space-5);
+    min-height: 0;
+  }
+  .menu-view-card .menu-view-collage {
+    --plate: 74px;
+  }
+}

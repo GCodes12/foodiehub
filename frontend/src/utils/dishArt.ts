@@ -27,7 +27,12 @@ export interface ArtSpec {
   mound?: boolean;
   pieces?: Topping;
   steam?: boolean;
+  /** What lies on the table around the dish; the default depends on the vessel (see DishArt). */
+  scene?: Scene;
 }
+
+/** spice: whole biryani spices · herb: chillies, lemon, coriander · sweet: rose petals, nuts · fresh: mint, lemon, ice. */
+export type Scene = 'spice' | 'herb' | 'sweet' | 'fresh';
 
 const GRAVY = { makhani: '#d9622b', dal: '#5b2d1a', curry: '#9c3b17', masala: '#6e2a12', salan: '#7d6a2a' };
 const RAITA = '#f6f1e4';
@@ -72,10 +77,10 @@ export const DISH_ART: Record<string, ArtSpec> = {
   papad: { vessel: 'plate', hue: 44, plate: 'papad' },
   'onion-salad': { vessel: 'plate', hue: 340, plate: 'onionRings', garnish: ['lemon'] },
   // Desserts
-  'gulab-jamun': { vessel: 'bowl', bowl: 'ceramic', hue: 18, content: '#e3a04b', toppings: ['jamun'], count: 2, garnish: ['pistachio'] },
-  rasmalai: { vessel: 'bowl', bowl: 'ceramic', hue: 44, content: '#f3dc9c', toppings: ['rasmalai'], count: 2, garnish: ['pistachio', 'saffron'] },
-  'double-ka-meetha': { vessel: 'plate', hue: 34, plate: 'breadPudding', garnish: ['pistachio'] },
-  phirni: { vessel: 'kulhad', hue: 30, content: '#f5ecd6', garnish: ['pistachio', 'saffron'] },
+  'gulab-jamun': { vessel: 'bowl', bowl: 'ceramic', hue: 18, content: '#e3a04b', toppings: ['jamun'], count: 2, garnish: ['pistachio'], scene: 'sweet' },
+  rasmalai: { vessel: 'bowl', bowl: 'ceramic', hue: 44, content: '#f3dc9c', toppings: ['rasmalai'], count: 2, garnish: ['pistachio', 'saffron'], scene: 'sweet' },
+  'double-ka-meetha': { vessel: 'plate', hue: 34, plate: 'breadPudding', garnish: ['pistachio'], scene: 'sweet' },
+  phirni: { vessel: 'kulhad', hue: 30, content: '#f5ecd6', garnish: ['pistachio', 'saffron'], scene: 'sweet' },
   // Beverages
   'sweet-lassi': { vessel: 'glass', hue: 38, drink: 'lassi', garnish: ['pistachio', 'saffron'] },
   'mango-lassi': { vessel: 'glass', hue: 42, drink: 'mango' },

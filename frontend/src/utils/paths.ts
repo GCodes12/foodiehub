@@ -1,8 +1,8 @@
 export const paths = {
   home: () => '/',
-  menu: (params: { category?: string; diet?: 'VEG' | 'EGG' | 'NON_VEG'; label?: string; dish?: string } = {}) => {
+  menu: (params: { category?: string; diet?: 'VEG' | 'EGG' | 'NON_VEG'; menu?: 'veg' | 'non-veg'; label?: string; dish?: string } = {}) => {
     const search = new URLSearchParams();
-    for (const key of ['category', 'diet', 'label', 'dish'] as const) {
+    for (const key of ['menu', 'category', 'diet', 'label', 'dish'] as const) {
       const value = params[key];
       if (value) {
         search.set(key, value);

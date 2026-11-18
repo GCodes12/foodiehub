@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import type { ArtSpec, Garnish, PlateItem, Topping } from '../../utils/dishArt.ts';
+import type { ArtSpec, Garnish, PlateItem, Scene, Topping } from '../../utils/dishArt.ts';
 import { seededRandom } from '../../utils/dishArt.ts';
 
-// Flat, warm illustrations of each dish, drawn as SVG (viewBox 400 × 300, the 4:3 card ratio). They scale to any size
-// and are replaced automatically by a real photo when one is added to src/assets/dishes.
+// Illustrations of each dish in a food-photography style: the dish on a dark wooden table under a soft spotlight, on a
+// banana leaf, board, napkin or coaster, with whole spices, herbs or petals around it. Drawn as SVG (viewBox 400 × 300,
+// the 4:3 card ratio), so they scale to any size; a real photo in src/assets/dishes replaces them automatically.
 
 type Rand = () => number;
 type Pt = [number, number];
@@ -204,11 +205,228 @@ function spread(cx: number, cy: number, rx: number, ry: number, count: number, r
   return pts;
 }
 
+/* ---------- the table: surface under the dish and props around it ---------- */
+
+type Surface = 'leaf' | 'board' | 'cloth' | 'coaster';
+
+const DEFAULT_SURFACE: Record<ArtSpec['vessel'], Surface> = {
+  handi: 'leaf', thali: 'leaf', bowl: 'board', plate: 'cloth', kulhad: 'cloth', glass: 'coaster', drink: 'coaster',
+};
+const DEFAULT_SCENE: Record<ArtSpec['vessel'], Scene> = {
+  handi: 'spice', thali: 'spice', bowl: 'herb', plate: 'herb', kulhad: 'sweet', glass: 'fresh', drink: 'fresh',
+};
+
+function Table({ hue, rand }: { hue: number; rand: Rand }) {
+  const grain: ReactNode[] = [];
+  for (let i = 0; i < 14; i++) {
+    const y = rand() * 300;
+    const bend = rand() * 16 - 8;
+    grain.push(<path key={i} d={`M-10 ${y} C120 ${y + bend} 260 ${y - bend} 410 ${y + bend / 2}`} stroke="#fff" strokeWidth={1 + rand()}
+      opacity={0.035 + rand() * 0.03} fill="none" />);
+  }
+  return (
+    <>
+      <rect width="400" height="300" fill={`url(#art-bg-${hue})`} />
+      {grain}
+      {[78, 156, 234].map((y) => <path key={y} d={`M0 ${y} H400`} stroke="#000" strokeWidth={2.5} opacity={0.32} />)}
+      {[78, 156, 234].map((y) => <path key={`h${y}`} d={`M0 ${y + 2} H400`} stroke="#fff" strokeWidth={1} opacity={0.06} />)}
+      <rect width="400" height="300" fill="url(#art-spot)" />
+    </>
+  );
+}
+
+function SurfaceUnder({ kind }: { kind: Surface }) {
+  switch (kind) {
+    case 'leaf':
+      return (
+        <g transform="rotate(-7 200 210)">
+          <path d="M18 214 C70 150 330 140 388 196 C346 270 70 284 18 214Z" fill="url(#art-leaf)" />
+          <path d="M18 214 C130 196 270 186 388 196" stroke="#cfe8b0" strokeWidth={3} fill="none" opacity={0.55} />
+          {Array.from({ length: 15 }, (_, i) => {
+            const x = 44 + i * 23;
+            const y = 214 - (x - 18) * 0.05;
+            return <g key={i} stroke="#cfe8b0" strokeWidth={1.2} opacity={0.22} fill="none">
+              <path d={`M${x} ${y} q16 -22 30 -40`} /><path d={`M${x} ${y} q16 22 30 42`} />
+            </g>;
+          })}
+        </g>
+      );
+    case 'board':
+      return (
+        <g>
+          <ellipse cx={200} cy={226} rx={168} ry={60} fill="#5a3418" />
+          <ellipse cx={200} cy={220} rx={168} ry={58} fill="url(#art-board)" />
+          {[140, 112, 84].map((rx) => (
+            <ellipse key={rx} cx={200} cy={220} rx={rx} ry={rx * 0.34} fill="none" stroke="#5a3418" strokeWidth={1.2} opacity={0.3} />
+          ))}
+        </g>
+      );
+    case 'cloth':
+      return (
+        <g transform="rotate(-14 120 240)">
+          <rect x={-10} y={176} width={230} height={150} rx={6} fill="#f3e9d8" />
+          <rect x={-10} y={196} width={230} height={9} fill="#7b1e2b" opacity={0.85} />
+          <rect x={-10} y={211} width={230} height={3} fill="#d99a32" />
+          <path d="M-10 250 H220" stroke="#d9cbb3" strokeWidth={1.5} />
+        </g>
+      );
+    case 'coaster':
+      return (
+        <g>
+          <ellipse cx={200} cy={258} rx={98} ry={24} fill="#8a6235" />
+          <ellipse cx={200} cy={255} rx={98} ry={24} fill="#c49a5a" />
+          {[80, 62, 44, 26].map((rx) => (
+            <ellipse key={rx} cx={200} cy={255} rx={rx} ry={rx * 0.245} fill="none" stroke="#8a6235" strokeWidth={1.4} opacity={0.5} />
+          ))}
+        </g>
+      );
+  }
+}
+
+type PropKind = 'starAnise' | 'cardamom' | 'cinnamon' | 'bayLeaf' | 'dryChilli' | 'clove' | 'lemonWedge' | 'garlic' | 'pepper'
+  | 'coriander' | 'petal' | 'pistachio' | 'almond' | 'mint' | 'lemonWheel' | 'ice';
+
+const SCENE_PROPS: Record<Scene, PropKind[]> = {
+  spice: ['starAnise', 'cinnamon', 'cardamom', 'bayLeaf', 'dryChilli', 'clove', 'cardamom', 'starAnise'],
+  herb: ['dryChilli', 'coriander', 'lemonWedge', 'garlic', 'pepper', 'coriander', 'dryChilli', 'garlic'],
+  sweet: ['petal', 'pistachio', 'almond', 'petal', 'cardamom', 'pistachio', 'petal', 'almond'],
+  fresh: ['mint', 'lemonWheel', 'ice', 'mint', 'ice', 'lemonWheel', 'mint', 'ice'],
+};
+
+/** Spots near the edges of the card, clear of the dish in the middle. */
+const PROP_SPOTS: Pt[] = [[34, 44], [366, 38], [22, 150], [380, 146], [40, 266], [360, 270], [118, 24], [286, 22]];
+
+function Prop({ kind, x, y, r, rand }: { kind: PropKind; x: number; y: number; r: number; rand: Rand }) {
+  const at = `translate(${x} ${y}) rotate(${r})`;
+  switch (kind) {
+    case 'starAnise':
+      return (
+        <g transform={at}>
+          {Array.from({ length: 8 }, (_, i) => (
+            <ellipse key={i} cx={0} cy={-9} rx={4.2} ry={9} fill="#6b3a1e" stroke="#3e1f0e" strokeWidth={1} transform={`rotate(${i * 45})`} />
+          ))}
+          {Array.from({ length: 8 }, (_, i) => <circle key={`s${i}`} cx={0} cy={-10} r={1.8} fill="#c98a4a" transform={`rotate(${i * 45})`} />)}
+          <circle r={3.5} fill="#3e1f0e" />
+        </g>
+      );
+    case 'cardamom':
+      return (
+        <g transform={at}>
+          <ellipse rx={11} ry={6} fill="#9bb35a" stroke="#6f8a36" strokeWidth={1.2} />
+          <path d="M-9 0 Q0 -3 9 0" stroke="#6f8a36" strokeWidth={1.2} fill="none" />
+          <path d="M10 0 l4 -1" stroke="#6f8a36" strokeWidth={2} strokeLinecap="round" />
+        </g>
+      );
+    case 'cinnamon':
+      return (
+        <g transform={at}>
+          <rect x={-24} y={-6} width={48} height={12} rx={5} fill="#8a4b22" />
+          <rect x={-24} y={-6} width={48} height={5} rx={2.5} fill="#b06a35" />
+          <ellipse cx={24} cy={0} rx={3.5} ry={6} fill="#5e2f12" />
+          <path d="M24 -3 a2.5 3 0 1 1 0 4" stroke="#b06a35" strokeWidth={1.2} fill="none" />
+        </g>
+      );
+    case 'bayLeaf':
+      return <Leaf x={x} y={y} r={r} color="#8a9a48" size={1.7} />;
+    case 'coriander':
+      return (
+        <g transform={at}>
+          <Leaf x={-6} y={0} r={-30} color="#4c9a32" size={0.9} />
+          <Leaf x={6} y={-3} r={40} color="#3f8f3a" size={0.8} />
+          <Leaf x={0} y={8} r={100} color="#4c9a32" size={0.75} />
+        </g>
+      );
+    case 'mint':
+      return (
+        <g transform={at}>
+          <Leaf x={-7} y={0} r={-20} color="#2f8f4a" size={1.2} />
+          <Leaf x={7} y={-2} r={30} color="#3fa35a" size={1.1} />
+        </g>
+      );
+    case 'dryChilli':
+      return (
+        <g transform={at}>
+          <path d="M-20 0 Q-4 -8 18 -2 Q21 1 18 3 Q-4 8 -20 0Z" fill="#9e1b10" />
+          <path d="M-12 -2 Q0 -5 12 -2" stroke="#d2452f" strokeWidth={1.6} fill="none" opacity={0.7} />
+          <path d="M-20 0 L-27 -4" stroke="#4f6a1c" strokeWidth={3} strokeLinecap="round" />
+        </g>
+      );
+    case 'clove':
+      return (
+        <g transform={at}>
+          <path d="M0 0 L0 14" stroke="#4a2512" strokeWidth={2.6} strokeLinecap="round" />
+          <circle cx={0} cy={-1} r={3.6} fill="#5e2f16" />
+        </g>
+      );
+    case 'garlic':
+      return (
+        <g transform={at}>
+          <path d="M-9 4 Q-10 -8 0 -10 Q10 -8 9 4 Q0 8 -9 4Z" fill="#f4ead8" stroke="#d9c8a8" strokeWidth={1.2} />
+          <path d="M0 -10 L1 -14" stroke="#c9b28a" strokeWidth={2} strokeLinecap="round" />
+        </g>
+      );
+    case 'pepper':
+      return (
+        <g transform={at}>
+          {[[0, 0], [7, 3], [-6, 5], [3, -6], [-4, -4]].map(([px, py]) => <circle key={`${px}${py}`} cx={px} cy={py} r={2.6} fill="#2b1a12" />)}
+        </g>
+      );
+    case 'lemonWedge':
+      return (
+        <g transform={at}>
+          <path d="M-16 0 A16 16 0 0 1 16 0Z" fill="#f6d33c" stroke="#e3b51d" strokeWidth={2.4} />
+          <path d="M0 0 L-9 -9 M0 0 L0 -13 M0 0 L9 -9" stroke="#fff3b0" strokeWidth={1.5} />
+        </g>
+      );
+    case 'lemonWheel':
+      return (
+        <g transform={at}>
+          <circle r={13} fill="#f6d33c" stroke="#e3b51d" strokeWidth={2.4} />
+          {Array.from({ length: 8 }, (_, i) => <path key={i} d="M0 0 L0 -10" stroke="#fff3b0" strokeWidth={1.3} transform={`rotate(${i * 45})`} />)}
+        </g>
+      );
+    case 'petal':
+      return (
+        <g transform={at}>
+          <path d="M0 10 C-14 2 -10 -12 0 -6 C10 -12 14 2 0 10Z" fill={rand() > 0.5 ? '#c2185b' : '#d84374'} opacity={0.9} />
+          <path d="M0 8 L0 -4" stroke="#fff" strokeWidth={0.8} opacity={0.35} />
+        </g>
+      );
+    case 'pistachio':
+      return (
+        <g transform={at}>
+          <ellipse rx={8} ry={5} fill="#d9c79a" />
+          <ellipse cx={1} rx={6} ry={3.6} fill="#8bbf4a" />
+        </g>
+      );
+    case 'almond':
+      return <g transform={at}><path d="M-10 0 Q-6 -7 6 -5 Q12 0 6 5 Q-6 7 -10 0Z" fill="#c68b4e" stroke="#9a6431" strokeWidth={1} /></g>;
+    case 'ice':
+      return (
+        <g transform={at}>
+          <rect x={-11} y={-11} width={22} height={22} rx={5} fill="#e6f4fb" opacity={0.55} stroke="#fff" strokeWidth={1.4} />
+          <path d="M-6 -6 L2 -6" stroke="#fff" strokeWidth={2} strokeLinecap="round" opacity={0.9} />
+        </g>
+      );
+  }
+}
+
+function Props({ scene, rand }: { scene: Scene; rand: Rand }) {
+  const kinds = SCENE_PROPS[scene];
+  return (
+    <g className="art-props">
+      {PROP_SPOTS.map(([x, y], i) => (
+        <Prop key={i} kind={kinds[i % kinds.length]} x={x + rand() * 14 - 7} y={y + rand() * 12 - 6} r={rand() * 360} rand={rand} />
+      ))}
+    </g>
+  );
+}
+
 /* ---------- vessels ---------- */
 
 function Handi({ spec, rand }: { spec: ArtSpec; rand: Rand }) {
   const grains: ReactNode[] = [];
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0; i < 110; i++) {
     const t = rand();
     const x = 118 + rand() * 164;
     const top = 180 - 80 * Math.sin(((x - 108) / 184) * Math.PI);
@@ -216,18 +434,29 @@ function Handi({ spec, rand }: { spec: ArtSpec; rand: Rand }) {
     const color = ['#fffaf0', '#fbefd6', '#f2a83c', '#e8862a', '#fff4df'][Math.floor(rand() * 5)];
     grains.push(<ellipse key={i} cx={x} cy={y} rx={5} ry={1.9} fill={color} transform={`rotate(${rand() * 180} ${x} ${y})`} />);
   }
+  // Saffron-stained patches and fried onions, the look of a layered dum biryani.
+  const patches = spread(200, 150, 70, 22, 5, rand).map(([x, y], i) => (
+    <ellipse key={i} cx={x} cy={y} rx={16 + rand() * 12} ry={7 + rand() * 4} fill="#e9862a" opacity={0.45} transform={`rotate(${rand() * 40 - 20} ${x} ${y})`} />
+  ));
+  const birista = spread(200, 140, 74, 24, 9, rand).map(([x, y], i) => (
+    <path key={i} d={`M${x - 6} ${y} q6 -6 12 0`} stroke="#6b2f0f" strokeWidth={2.6} strokeLinecap="round" fill="none" transform={`rotate(${rand() * 360} ${x} ${y})`} />
+  ));
   const toppingSpots = spread(200, 148, 66, 20, spec.count ?? 5, rand);
   return (
     <>
-      <ellipse cx={200} cy={266} rx={118} ry={13} fill="rgb(60 25 10 / 20%)" />
+      <ellipse cx={200} cy={266} rx={118} ry={13} fill="rgb(0 0 0 / 48%)" filter="url(#art-blur)" />
       <ellipse cx={96} cy={196} rx={10} ry={14} fill="none" stroke="#7d3a14" strokeWidth={6} />
       <ellipse cx={304} cy={196} rx={10} ry={14} fill="none" stroke="#7d3a14" strokeWidth={6} />
       <path d="M100 180 C100 242 140 264 200 264 C260 264 300 242 300 180Z" fill="url(#art-copper)" />
       <path d="M110 206 C150 222 250 222 290 206" stroke="#e8b25a" strokeWidth={6} fill="none" opacity={0.9} />
       <path d="M128 232 C160 244 240 244 272 232" stroke="#e8b25a" strokeWidth={3} fill="none" opacity={0.6} />
+      <path d="M114 192 C116 226 138 248 166 256" stroke="#fff" strokeWidth={7} strokeLinecap="round" fill="none" opacity={0.18} />
       <ellipse cx={200} cy={180} rx={104} ry={22} fill="#a24e1d" />
+      <ellipse cx={200} cy={178} rx={104} ry={20} fill="none" stroke="#e8b25a" strokeWidth={2.5} opacity={0.7} />
       <path d="M108 181 C120 124 166 100 200 100 C234 100 280 124 292 181Z" fill={spec.content ? spec.content : 'url(#art-rice)'} />
+      {patches}
       {grains}
+      {birista}
       {toppingSpots.map(([x, y], i) => (
         <Topping key={i} kind={spec.toppings![i % spec.toppings!.length]} x={x} y={y} r={rand() * 60 - 30} rand={rand} />
       ))}
@@ -247,7 +476,7 @@ function Bowl({ spec, rand }: { spec: ArtSpec; rand: Rand }) {
     : spread(200, 172, small ? 86 : 74, small ? 16 : 13, count, rand);
   return (
     <>
-      <ellipse cx={200} cy={262} rx={118} ry={13} fill="rgb(60 25 10 / 20%)" />
+      <ellipse cx={200} cy={262} rx={118} ry={13} fill="rgb(0 0 0 / 48%)" filter="url(#art-blur)" />
       <path d="M90 172 C94 238 140 260 200 260 C260 260 306 238 310 172Z" fill={`url(#art-bowl-${spec.bowl ?? 'ceramic'})`} />
       <path d="M104 204 C150 222 250 222 296 204" stroke={style.band} strokeWidth={4} fill="none" opacity={0.85} />
       <ellipse cx={200} cy={172} rx={110} ry={25} fill={style.rim} />
@@ -324,7 +553,7 @@ function Plate({ item, rand, garnish }: { item: PlateItem; rand: Rand; garnish: 
   }
   return (
     <>
-      <ellipse cx={200} cy={262} rx={150} ry={14} fill="rgb(60 25 10 / 18%)" />
+      <ellipse cx={200} cy={262} rx={150} ry={14} fill="rgb(0 0 0 / 48%)" filter="url(#art-blur)" />
       <ellipse cx={200} cy={212} rx={164} ry={50} fill="#fbf7f0" stroke="#e6dccb" strokeWidth={3} />
       <ellipse cx={200} cy={212} rx={136} ry={38} fill="#f3ebde" />
       {content}
@@ -340,7 +569,7 @@ function Glass({ spec, rand }: { spec: ArtSpec; rand: Rand }) {
   if (spec.vessel === 'drink') {
     return (
       <>
-        <ellipse cx={200} cy={264} rx={70} ry={10} fill="rgb(20 30 40 / 22%)" />
+        <ellipse cx={200} cy={264} rx={70} ry={10} fill="rgb(0 0 0 / 48%)" filter="url(#art-blur)" />
         <path d="M150 74 L250 74 L240 258 L160 258Z" fill="#ffffff" opacity={0.35} stroke="#fff" strokeWidth={3} />
         <path d="M156 110 L244 110 L236 252 L164 252Z" fill={liquid} />
         {[[180, 140], [214, 128], [196, 168]].map(([x, y]) => (
@@ -356,7 +585,7 @@ function Glass({ spec, rand }: { spec: ArtSpec; rand: Rand }) {
   }
   return (
     <>
-      <ellipse cx={200} cy={264} rx={70} ry={10} fill="rgb(60 25 10 / 20%)" />
+      <ellipse cx={200} cy={264} rx={70} ry={10} fill="rgb(0 0 0 / 48%)" filter="url(#art-blur)" />
       <path d="M148 70 L252 70 L240 258 L160 258Z" fill="#ffffff" opacity={0.4} stroke="#fff" strokeWidth={3} />
       <path d="M153 96 L247 96 L236 252 L164 252Z" fill={liquid} />
       <ellipse cx={200} cy={96} rx={47} ry={9} fill={kind === 'mango' ? '#f8c766' : '#fffaf0'} />
@@ -380,7 +609,7 @@ function Glass({ spec, rand }: { spec: ArtSpec; rand: Rand }) {
 function Kulhad({ spec, rand }: { spec: ArtSpec; rand: Rand }) {
   return (
     <>
-      <ellipse cx={200} cy={262} rx={90} ry={12} fill="rgb(60 25 10 / 20%)" />
+      <ellipse cx={200} cy={262} rx={90} ry={12} fill="rgb(0 0 0 / 48%)" filter="url(#art-blur)" />
       <path d="M124 168 C128 236 160 256 200 256 C240 256 272 236 276 168Z" fill="url(#art-bowl-clay)" />
       <ellipse cx={200} cy={168} rx={77} ry={19} fill="#a9532c" />
       <ellipse cx={200} cy={170} rx={68} ry={14} fill={spec.content ?? '#f5ecd6'} />
@@ -402,7 +631,7 @@ function Thali({ spec, rand }: { spec: ArtSpec; rand: Rand }) {
   }
   return (
     <>
-      <ellipse cx={200} cy={264} rx={168} ry={14} fill="rgb(60 25 10 / 20%)" />
+      <ellipse cx={200} cy={264} rx={168} ry={14} fill="rgb(0 0 0 / 48%)" filter="url(#art-blur)" />
       <ellipse cx={200} cy={212} rx={176} ry={54} fill="url(#art-bowl-brass)" />
       <ellipse cx={200} cy={210} rx={160} ry={44} fill="#e8c06e" />
       {spec.mound && (
@@ -442,10 +671,29 @@ export function DishArt({ spec, seed, className = '', title }: { spec: ArtSpec; 
     <svg viewBox="0 0 400 300" className={`dish-art ${className}`} role={title ? 'img' : undefined}
       aria-label={title} aria-hidden={title ? undefined : true} preserveAspectRatio="xMidYMid slice">
       <defs>
-        <radialGradient id={bgId} cx="50%" cy="38%" r="75%">
-          <stop offset="0%" stopColor={`hsl(${spec.hue} 70% 94%)`} />
-          <stop offset="100%" stopColor={`hsl(${spec.hue} 52% 80%)`} />
+        <radialGradient id={bgId} cx="50%" cy="45%" r="78%">
+          <stop offset="0%" stopColor={`hsl(${spec.hue} 30% 30%)`} />
+          <stop offset="100%" stopColor={`hsl(${spec.hue} 36% 11%)`} />
         </radialGradient>
+        <radialGradient id="art-spot" cx="50%" cy="48%" r="55%">
+          <stop offset="0%" stopColor="#fff2d6" stopOpacity={0.26} />
+          <stop offset="100%" stopColor="#fff2d6" stopOpacity={0} />
+        </radialGradient>
+        <radialGradient id="art-vignette" cx="50%" cy="50%" r="72%">
+          <stop offset="62%" stopColor="#000" stopOpacity={0} />
+          <stop offset="100%" stopColor="#000" stopOpacity={0.55} />
+        </radialGradient>
+        <linearGradient id="art-leaf" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3f9142" />
+          <stop offset="100%" stopColor="#1f5e24" />
+        </linearGradient>
+        <linearGradient id="art-board" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#c08a4f" />
+          <stop offset="100%" stopColor="#8a5a2b" />
+        </linearGradient>
+        <filter id="art-blur" x="-20%" y="-50%" width="140%" height="200%">
+          <feGaussianBlur stdDeviation="6" />
+        </filter>
         <linearGradient id="art-copper" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#d47a3a" />
           <stop offset="55%" stopColor="#a9521f" />
@@ -466,10 +714,11 @@ export function DishArt({ spec, seed, className = '', title }: { spec: ArtSpec; 
           <stop offset="100%" stopColor="#4a1606" stopOpacity={0.2} />
         </radialGradient>
       </defs>
-      <rect width="400" height="300" fill={`url(#${bgId})`} />
-      <circle cx={200} cy={170} r={128} fill="#fff" opacity={0.2} />
+      <Table hue={spec.hue} rand={rand} />
+      <Props scene={spec.scene ?? DEFAULT_SCENE[vessel]} rand={rand} />
       {/* The food is drawn on a 400 × 300 canvas and enlarged around its centre to fill the card. */}
       <g transform={`translate(200 172) scale(${SCALE[vessel]}) translate(-200 -172)`}>
+      <SurfaceUnder kind={DEFAULT_SURFACE[vessel]} />
       {spec.steam && <Steam xs={steamXs} />}
       {vessel === 'handi' && <Handi spec={spec} rand={rand} />}
       {vessel === 'bowl' && <Bowl spec={spec} rand={rand} />}
@@ -478,6 +727,7 @@ export function DishArt({ spec, seed, className = '', title }: { spec: ArtSpec; 
       {vessel === 'kulhad' && <Kulhad spec={spec} rand={rand} />}
       {vessel === 'thali' && <Thali spec={spec} rand={rand} />}
       </g>
+      <rect width="400" height="300" fill="url(#art-vignette)" />
     </svg>
   );
 }

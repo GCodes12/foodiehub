@@ -16,14 +16,67 @@ export type SortMode = 'RECOMMENDED' | 'PRICE_ASC' | 'PRICE_DESC';
 export type LabelFilter = 'BESTSELLER' | 'CHEF_SPECIAL' | 'SIGNATURE';
 export const LABEL_FILTERS: readonly LabelFilter[] = ['BESTSELLER', 'CHEF_SPECIAL', 'SIGNATURE'];
 
+/**
+ * Which menu the customer is looking at. VEG = vegetarian dishes only. NON_VEG = chicken, mutton and egg dishes plus the
+ * sides, desserts and drinks that go with them (all vegetarian), so a non-veg order can still include raita or a lassi.
+ */
+export type MenuView = 'ALL' | 'VEG' | 'NON_VEG';
+export const MENU_VIEWS: readonly MenuView[] = ['ALL', 'VEG', 'NON_VEG'];
+
+/** Categories shown in both the veg and the non-veg menu. */
+export const PAIRING_CATEGORIES: ReadonlySet<string> = new Set(['ACCOMPANIMENTS', 'DESSERTS', 'BEVERAGES']);
+
 export interface MenuFilters {
   query: string;
   category: string | null;
   diet: DietFilter;
   label?: LabelFilter | null;
+  view?: MenuView;
 }
 
-export const NO_FILTERS: MenuFilters = { query: '', category: null, diet: 'ALL', label: null };
+export const NO_FILTERS: MenuFilters = { query: '', category: null, diet: 'ALL', label: null, view: 'ALL' };
+
+export function matchesView(item: MenuItem, view: MenuView | undefined): boolean {
+  switch (view) {
+    case 'VEG':
+      return item.diet === 'VEG';
+    case 'NON_VEG':
+      return item.diet === 'NON_VEG' || item.diet === 'EGG' || (item.diet === 'VEG' && PAIRING_CATEGORIES.has(item.category));
+    default:
+      return true;
+  }
+}
+
+/** The dishes in a menu view (unfiltered otherwise). */
+export function itemsInView(items: MenuItem[], view: MenuView | undefined): MenuItem[] {
+  return items.filter((item) => matchesView(item, view));
+}
+
+/** Count of the view's own dishes: veg dishes for VEG, non-veg and egg dishes for NON_VEG (pairings not counted). */
+export function viewDishCount(items: MenuItem[], view: MenuView): number {
+  if (view === 'ALL') {
+    return items.length;
+  }
+  return items.filter((item) => (view === 'VEG' ? item.diet === 'VEG' : item.diet === 'NON_VEG' || item.diet === 'EGG')).length;
+}
+
+/** Up to `count` dishes that represent a view (its bestsellers and chef's specials first), for the menu cards' artwork. */
+export function viewHighlights(items: MenuItem[], view: MenuView, count = 3): MenuItem[] {
+  const own = items.filter((item) => matchesView(item, view) && !(view !== 'ALL' && PAIRING_CATEGORIES.has(item.category)));
+  const ranked = [...own].sort((a, b) => Number(b.bestseller || b.chefSpecial) - Number(a.bestseller || a.chefSpecial));
+  const picked: MenuItem[] = [];
+  const seen = new Set<string>();
+  for (const item of ranked) { // one per category, so the three pictures differ
+    if (!seen.has(item.category)) {
+      seen.add(item.category);
+      picked.push(item);
+    }
+    if (picked.length === count) {
+      break;
+    }
+  }
+  return picked;
+}
 
 export function matchesLabel(item: MenuItem, label: LabelFilter | null | undefined): boolean {
   switch (label) {
@@ -81,6 +134,7 @@ export function filterItems(items: MenuItem[], filters: MenuFilters): MenuItem[]
     matchesQuery(item, filters.query)
     && (filters.category === null || item.category === filters.category)
     && (filters.diet === 'ALL' || item.diet === filters.diet)
+    && matchesView(item, filters.view)
     && matchesLabel(item, filters.label));
 }
 

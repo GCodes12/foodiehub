@@ -5,6 +5,7 @@ import { ErrorMessage } from '../components/common/ErrorMessage.tsx';
 import { DishCardSkeleton } from '../components/common/Skeleton.tsx';
 import { DishDetail } from '../components/menu/DishDetail.tsx';
 import { MenuBrowser } from '../components/menu/MenuBrowser.tsx';
+import { slugFromView, viewFromSlug } from '../components/menu/MenuViews.tsx';
 import { useMenu } from '../hooks/useMenu.ts';
 import { usePageMeta } from '../hooks/usePageMeta.ts';
 import { t } from '../utils/i18n.ts';
@@ -25,6 +26,7 @@ export function MenuPage() {
     category: params.get('category'),
     diet: (DIETS.includes(params.get('diet') ?? '') ? params.get('diet') : 'ALL') as DietFilter,
     label: (LABEL_FILTERS as readonly string[]).includes(params.get('label') ?? '') ? params.get('label') as LabelFilter : null,
+    view: viewFromSlug(params.get('menu')),
   };
   const sort = (SORTS.includes(params.get('sort') ?? '') ? params.get('sort') : 'RECOMMENDED') as SortMode;
 
@@ -65,7 +67,7 @@ export function MenuPage() {
       {menu.status === 'ready' && (
         <>
           <MenuBrowser items={menu.data.items} restaurantId={menu.data.restaurant.id} filters={filters} sort={sort}
-            onFilters={(f) => update({ q: f.query, category: f.category, diet: f.diet, label: f.label ?? null })}
+            onFilters={(f) => update({ q: f.query, category: f.category, diet: f.diet, label: f.label ?? null, menu: slugFromView(f.view ?? 'ALL') })}
             onSort={(s) => update({ sort: s })}
             onOpen={(item) => update({ dish: item.id }, false)} />
           <DishDetail item={openDish} restaurantId={menu.data.restaurant.id} onClose={() => update({ dish: null })} />

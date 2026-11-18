@@ -1,27 +1,22 @@
 import { ArrowUpDown, Award, ChefHat, Search, Sparkles, X } from 'lucide-react';
-import type { Diet } from '../../types/api.ts';
 import { t } from '../../utils/i18n.ts';
 import { categoryName } from '../../utils/menu.ts';
-import type { DietFilter, LabelFilter, MenuFilters, SortMode } from '../../utils/menu.ts';
-import { DietMark } from '../common/DietMark.tsx';
+import type { LabelFilter, MenuFilters, SortMode } from '../../utils/menu.ts';
 
-const DIETS: DietFilter[] = ['ALL', 'VEG', 'EGG', 'NON_VEG'];
 const SORTS: SortMode[] = ['RECOMMENDED', 'PRICE_ASC', 'PRICE_DESC'];
 
 const LABEL_ICONS: Record<LabelFilter, typeof Award> = { BESTSELLER: Award, CHEF_SPECIAL: ChefHat, SIGNATURE: Sparkles };
 
 interface Props {
   categories: string[];
-  /** false when the menu has no diet data: the diet filter could only ever show "no results". */
-  showDiet?: boolean;
   filters: MenuFilters;
   sort: SortMode;
   onFilters: (filters: MenuFilters) => void;
   onSort: (sort: SortMode) => void;
 }
 
-/** Search, category chips, diet filter and price sort. Purely controlled: the page owns the state (in the URL). */
-export function MenuToolbar({ categories, showDiet = true, filters, sort, onFilters, onSort }: Props) {
+/** Search, category chips and price sort (the veg / non-veg choice is MenuViewSwitcher). Purely controlled: the page owns the state (in the URL). */
+export function MenuToolbar({ categories, filters, sort, onFilters, onSort }: Props) {
   const LabelIcon = filters.label ? LABEL_ICONS[filters.label] : null;
   return (
     <div className="menu-toolbar">
@@ -36,15 +31,6 @@ export function MenuToolbar({ categories, showDiet = true, filters, sort, onFilt
             </button>
           )}
         </label>
-        {showDiet && <div className="segmented" role="group" aria-label={t('menu.dietLabel')}>
-          {DIETS.map((diet) => (
-            <button key={diet} type="button" aria-pressed={filters.diet === diet}
-              className={`segment${filters.diet === diet ? ' is-active' : ''}`} onClick={() => onFilters({ ...filters, diet })}>
-              {diet !== 'ALL' && <DietMark diet={diet as Diet} size={13} />}
-              {diet === 'ALL' ? t('menu.dietAll') : t(`diet.${diet}`)}
-            </button>
-          ))}
-        </div>}
         <label className="sort">
           <ArrowUpDown size={16} aria-hidden="true" />
           <span className="visually-hidden">{t('menu.sortLabel')}</span>

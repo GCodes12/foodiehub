@@ -21,7 +21,7 @@ describe('MenuBrowser', () => {
   it('renders every dish under its category heading, in menu order', () => {
     const full = text(show());
     assert.match(full, /4 dishes/);
-    const page = full.slice(full.indexOf('4 dishes')); // after the toolbar (its chips repeat the category names)
+    const page = full.slice(full.lastIndexOf('4 dishes')); // the result count: after the menu switch and the toolbar's chips
     const order = ['Veg Biryani', 'Classic Veg Dum Biryani', 'Chicken Biryani', 'Classic Chicken Dum Biryani', 'Starters', 'Chicken 65', 'Beverages', 'Mango Lassi']
       .map((s) => page.indexOf(s));
     assert.deepEqual([...order].sort((a, b) => a - b), order);
@@ -56,12 +56,36 @@ describe('MenuBrowser', () => {
     assert.doesNotMatch(show(NO_FILTERS, 'PRICE_ASC'), /menu-section-title/);
   });
 
-  it('hides the diet filter when the menu has no diet data, instead of offering a filter that matches nothing', () => {
+  it('hides the veg / non-veg menu switch when the menu has no diet data, instead of offering menus that match nothing', () => {
     const noDiet = ITEMS.map((i) => ({ ...i, diet: null }));
     const html = render(<MenuBrowser items={noDiet} restaurantId="r1" filters={NO_FILTERS} sort="RECOMMENDED"
       onFilters={() => {}} onSort={() => {}} onOpen={() => {}} />);
-    assert.doesNotMatch(html, /aria-label="Diet"/);
-    assert.match(show(), /aria-label="Diet"/);
+    assert.doesNotMatch(html, /aria-label="Choose a menu"/);
+    assert.match(show(), /aria-label="Choose a menu"/);
+  });
+
+  it('offers full, veg and non-veg menus with their dish counts, the current one pressed', () => {
+    const html = show({ ...NO_FILTERS, view: 'VEG' });
+    assert.match(text(html), /Full menu 4 dishes/);
+    assert.match(text(html), /Veg menu 2 vegetarian dishes/);
+    assert.match(text(html), /Non-veg menu 2 non-veg dishes/);
+    assert.match(html, /aria-pressed="true" class="menu-view menu-view-veg is-active"/);
+  });
+
+  it('the veg menu shows only veg dishes and only the categories that have them', () => {
+    const html = show({ ...NO_FILTERS, view: 'VEG' });
+    const full = text(html);
+    assert.match(full, /2 dishes/);
+    assert.doesNotMatch(full.slice(full.indexOf('2 dishes')), /Chicken/); // the dish list, after the switcher and toolbar
+    assert.doesNotMatch(html, />Starters</); // no chip for a category without veg dishes
+  });
+
+  it('the non-veg menu shows non-veg dishes plus drinks, but no veg biryani', () => {
+    const full = text(show({ ...NO_FILTERS, view: 'NON_VEG' }));
+    const page = full.slice(full.indexOf('3 dishes'));
+    assert.match(page, /Classic Chicken Dum Biryani/);
+    assert.match(page, /Mango Lassi/);
+    assert.doesNotMatch(page, /Classic Veg Dum Biryani/);
   });
 
   it('shows an active label filter as a removable pill', () => {
