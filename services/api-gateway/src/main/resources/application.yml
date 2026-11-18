@@ -1,0 +1,55 @@
+# API gateway (plan.md D2/D3, DEC-019): the only public entry for /api/v1/**. Routes find their service in Consul by
+# name (lb://…) and Spring Cloud LoadBalancer spreads requests over the healthy instances (round robin).
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        instance-id: ${spring.application.name}-${server.port}-${random.value}
+        hostname: ${SERVICE_HOSTNAME:localhost}
+        prefer-ip-address: false
+        health-check-path: /actuator/health
+        health-check-interval: 10s
+        health-check-critical-timeout: 60s
+    gateway:
+      server:
+        webmvc:
+          # Routes are matched top to bottom: the more specific /admin/orders route comes before /admin/**.
+          routes:
+            - id: order-admin
+              uri: lb://order-service
+              predicates:
+                - Path=/api/v1/admin/orders,/api/v1/admin/orders/**
+            - id: orders
+              uri: lb://order-service
+              predicates:
+                - Path=/api/v1/orders,/api/v1/orders/**,/api/v1/owner/orders,/api/v1/owner/orders/**
+            - id: restaurants
+              uri: lb://restaurant-service
+              predicates:
+                - Path=/api/v1/restaurants,/api/v1/restaurants/**,/api/v1/owner/restaurants,/api/v1/owner/restaurants/**,/api/v1/admin,/api/v1/admin/**
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Same realm as the services; a token must be issued for at least one of them.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/foodiehub}
+          audiences: restaurant-service,order-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+server:
+  port: ${GATEWAY_PORT:8090}
+  error:
+    include-message: never
+    include-stacktrace: never

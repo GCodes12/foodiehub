@@ -1,0 +1,5 @@
+# Tests never need a running Consul (DEC-019). Service instances are given by each test (simple discovery client).
+spring:
+  cloud:
+    consul:
+      enabled: false

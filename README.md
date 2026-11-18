@@ -8,8 +8,8 @@ hands-on way to practise microservice design, OAuth2/OIDC security, and Spec-Dri
 > check out a pickup order and follow it live; the restaurant owner manages the menu and moves orders through
 > Accepted → Preparing → Ready → Picked up (DEC-015, DEC-016). It runs locally against MySQL. **No online payment**:
 > an accepted order is paid at the counter. A platform **administrator** creates, edits, activates and deactivates
-> restaurants, assigns owners and sees a platform overview (DEC-017). The gateway is not built yet (the Vite dev proxy
-> stands in for it).
+> restaurants, assigns owners and sees a platform overview (DEC-017). All API traffic goes through a Spring Cloud
+> Gateway that finds the services in **Consul** and load-balances between their instances (DEC-019).
 
 | Home | Menu | Dish detail |
 |---|---|---|
@@ -51,8 +51,9 @@ reviews, promotions, multiple currencies, partial refunds, mobile apps.
 
 ## Planned technology stack
 
-Implemented so far: Java 21, Spring Boot 4.1 (restaurant and order services), MySQL, Keycloak 26.8 (OIDC/JWT) and
-Docker Compose (optional: MySQL, Keycloak). Everything else is planned.
+Implemented so far: Java 21, Spring Boot 4.0.9 with Spring Cloud 2025.1.4 (restaurant service, order service, API
+gateway), Spring Cloud Gateway (Server Web MVC), Consul service discovery with Spring Cloud LoadBalancer, MySQL,
+Keycloak 26.8 (OIDC/JWT) and Docker Compose (optional: MySQL, Keycloak). Everything else is planned.
 
 | Area | Planned technology |
 |---|---|
@@ -61,12 +62,13 @@ Docker Compose (optional: MySQL, Keycloak). Everything else is planned.
 | API gateway | Spring Cloud Gateway |
 | Identity and access | Keycloak (OIDC/JWT) with Spring Security |
 | Database | MySQL (a single container, with a separate database and users per service) |
-| Service discovery | Consul (planned for a later milestone, M5) |
+| Service discovery | Consul (implemented early, DEC-019; resilience still planned for M5) |
 | Local infrastructure | Docker + Docker Compose |
 | CI and code quality | Jenkins + SonarQube (planned; introduced at the end of M1) |
 
-Exact versions will be verified before scaffolding. The Spring Boot 4.x line is selected on the
-condition that a compatible Spring Cloud release train is confirmed first.
+**Versions (DEC-019):** Spring Cloud has no GA release for Spring Boot 4.1 yet (2026.0 is a release candidate), so the
+backend uses the supported pair Spring Boot 4.0.9 + Spring Cloud 2025.1.4. Moving to 4.1 / 2026.0 is a version bump
+once that train is GA.
 
 ## Development status
 
@@ -76,7 +78,8 @@ condition that a compatible Spring Cloud release train is confirmed first.
 | Restaurant service | Implemented: list, detail and menu endpoints (menu items carry category, description, diet, bestseller / chef-special labels and an image key, DEC-014); owner endpoints (DEC-015, ownership by account id since DEC-017); administrator endpoints (DEC-017); Flyway schema V1–V4; ZAYORA seed (42 dishes); tests |
 | Order service | Implemented: `POST /api/v1/orders` (server pricing, snapshots, one transaction, idempotent) `GET /api/v1/orders/{id}` (owner only) and `GET /api/v1/orders` (the customer's own orders, newest first, DEC-014); owner order list and lifecycle (DEC-015, DEC-016); read-only administrator overview (DEC-017); Flyway V1–V3; tests |
 | Frontend | Implemented ([`frontend/`](frontend/)): ZAYORA web app — React + Vite + React Router; home, menu (categories, search, veg/egg/non-veg filter, price sort, dish detail), cart, protected checkout with a retry-safe `Idempotency-Key`, order confirmation, My Orders, owner Kitchen, admin pages (`/admin`); Keycloak sign-in (PKCE); 122 tests |
-| Gateway, payment/notification services | Not started. In development the Vite proxy routes `/api/v1/*` to the services |
+| API gateway and discovery | Implemented (DEC-019): `services/api-gateway` (port 8090) routes `/api/v1/**` to services registered in Consul (port 8500), checks tokens at the edge and balances requests over healthy instances |
+| Payment / notification services | Not started |
 | Build files | Maven Wrapper + root aggregator POM; Docker Compose for MySQL only. CI pipelines: not created |
 | Security controls | Keycloak realm `foodiehub` with roles `CUSTOMER`, `RESTAURANT_OWNER` (DEC-015) and `ADMIN` (DEC-017); both services validate JWTs (issuer, signature, audience); only customers order; owners manage only their own restaurant (by account id); customers see only their own orders; admin endpoints need `ADMIN`; the application never grants roles (read-only Keycloak service account). Browsing stays public by design. **Not implemented:** gateway, authentication of the internal price lookup (SEC-005) |
 | Payments | **Not available.** No payment processing of any kind exists |
@@ -294,7 +297,8 @@ Keycloak console. Either way the application never grants roles.
 
 #### 8. Start the order service (CP-3, CP-4)
 
-The order service needs MySQL (`order_db`), Keycloak and the restaurant service (for prices) to be running.
+The order service needs MySQL (`order_db`), Keycloak, Consul (step 8a) and the restaurant service (for prices) to be
+running.
 Create `order_db` once: `infra/mysql/local/setup-local-db.sh` does it (with dedicated `order_migrator` /
 `order_app` accounts), or with the root option:
 `/usr/local/mysql/bin/mysql -u root -p -h 127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS order_db CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;"`
@@ -312,8 +316,70 @@ active profile `dev`. Flyway creates `customer_order` and `order_item` on the fi
 |---|---|
 | 3306 | MySQL |
 | 8080 | Keycloak |
-| 8081 | restaurant-service |
+| 8081 | restaurant-service (a second instance can run on 8083, step 8a) |
 | 8082 | order-service |
+| 8090 | api-gateway (the only port the frontend talks to) |
+| 8500 | Consul (UI: http://localhost:8500) |
+
+#### 8a. Consul and the API gateway (DEC-019)
+
+Since DEC-019 the services register in **Consul**, and the browser reaches them only through the **API gateway**.
+Order of starting: MySQL → Keycloak → **Consul** → restaurant-service and order-service → **api-gateway** → web app.
+
+```bash
+brew tap hashicorp/tap && brew install hashicorp/tap/consul   # once
+infra/consul/start-local-consul.sh                            # keep open; UI at http://localhost:8500
+cd services/api-gateway && ../../mvnw spring-boot:run         # http://localhost:8090 (no dev profile needed)
+```
+
+- Start Consul **before** the services: they register on start-up and fail if Consul is unreachable. In the Consul UI
+  each instance shows two green checks (the agent and `/actuator/health`).
+- IntelliJ: add a run configuration for `com.foodiehub.gateway.ApiGatewayApplication` (module `api-gateway`).
+- **Load balancing demo:** start a second restaurant-service with `--server.port=8083` (IntelliJ: copy the run
+  configuration, add `--server.port=8083` as program argument, allow multiple instances; or
+  `../../mvnw spring-boot:run -Dspring-boot.run.profiles=dev "-Dspring-boot.run.arguments=--server.port=8083"`).
+  The gateway and order-service then alternate between both instances (see *Check load balancing* below).
+- Routes: `/api/v1/orders/**`, `/api/v1/owner/orders/**`, `/api/v1/admin/orders/**` → `order-service`; everything else
+  under `/api/v1/` → `restaurant-service`. Public browsing needs no token; all other API calls need a valid token at
+  the gateway **and** pass the services' own role and ownership checks (plan.md D3). Only `/actuator/health` is open on
+  each process; no other actuator endpoint is reachable.
+- order-service calls restaurant-service as `http://restaurant-service` through the load balancer. To call one
+  instance directly (without Consul), set `RESTAURANT_SERVICE_LOAD_BALANCED=false` and `RESTAURANT_SERVICE_URL`.
+- Consul runs in development mode: in memory, no ACLs or TLS. Restarting it forgets registrations until each service
+  restarts.
+
+**Check discovery.** Every instance should be listed with passing checks:
+
+```bash
+curl -s http://localhost:8500/v1/health/service/restaurant-service | python3 -c \
+  'import json,sys; [print(e["Service"]["Port"], [c["Status"] for c in e["Checks"]]) for e in json.load(sys.stdin)]'
+# 8081 ['passing', 'passing']
+# 8083 ['passing', 'passing']
+```
+
+**Check load balancing.** Requests through the gateway (or the web app's dev server) are spread round robin. One way to
+see it: start the second instance with an access log, send requests, and count what it served:
+
+```bash
+# second instance, logging requests to /tmp/r2-access
+../../mvnw spring-boot:run -Dspring-boot.run.profiles=dev \
+  "-Dspring-boot.run.arguments=--server.port=8083 --server.tomcat.accesslog.enabled=true --server.tomcat.accesslog.directory=/tmp/r2-access"
+# then, in another terminal: 20 requests through the gateway
+for i in $(seq 20); do curl -s -o /dev/null http://localhost:8090/api/v1/restaurants; done
+sleep 12; cat /tmp/r2-access/* | grep -c "GET /api/v1/restaurants "    # about 10: the other half went to 8081
+```
+
+**Failover demonstration.** Keep requesting while one instance stops:
+
+```bash
+for i in $(seq 60); do curl -s -o /dev/null -w "%{http_code} " http://localhost:8090/api/v1/restaurants; sleep 1; done
+# meanwhile stop the 8083 instance (Ctrl+C in its terminal, or Stop in IntelliJ)
+```
+
+A clean shutdown deregisters the instance from Consul at once, so every request keeps answering `200` from 8081. After a
+crash (no clean shutdown) Consul notices only through the failing health check (about 10 s) and the gateway refreshes
+its cached instance list periodically, so some requests can fail for a short while. **No retries or circuit breakers
+are configured yet** (Resilience4j is planned for M5); this setup is for local development, not production.
 
 #### 9. Place and view an order (Bruno or Postman)
 
@@ -371,7 +437,8 @@ curl -i http://localhost:8082/api/v1/orders -H "Authorization: Bearer $TOKEN" -H
 
 #### 10. Start the web app (CP-5)
 
-Needs the restaurant service (step 5), Keycloak (step 7) and the order service (step 8) running.
+Needs Keycloak (step 7), the restaurant service (step 5), the order service (step 8), Consul and the API gateway
+(step 8a) running: the dev server sends all API calls to the gateway.
 
 ```bash
 cd frontend
@@ -405,9 +472,8 @@ is recorded in `order_db.order_status_change`. Customers see the progress tracke
 My Orders, refreshed every 20 s while the order is in progress.
 
 - Port **5173 is required**: Keycloak only accepts sign-in redirects to `http://localhost:5173`.
-- The dev server forwards `/api/v1/restaurants`, `/api/v1/owner/restaurants` and `/api/v1/admin` to port 8081, and
-  `/api/v1/orders`, `/api/v1/owner/orders` and `/api/v1/admin/orders` to port 8082 (`vite.config.ts`;
-  override with `RESTAURANT_SERVICE_URL` / `ORDER_SERVICE_URL`). The browser never calls the services directly.
+- The dev server forwards every `/api` call to the API gateway on port 8090 (`vite.config.ts`; override with
+  `GATEWAY_URL`), which routes it to the right service through Consul. The browser never calls the services directly.
 - Optional browser settings are in [`frontend/.env.example`](frontend/.env.example): service base URLs
   (`VITE_RESTAURANT_API_URL`, `VITE_ORDER_API_URL`; direct URLs need CORS on the services), `VITE_RESTAURANT_ID`, and
   Keycloak (`VITE_KEYCLOAK_URL`, `VITE_KEYCLOAK_REALM`, `VITE_KEYCLOAK_CLIENT_ID`). No secrets: the client is public.
@@ -487,7 +553,7 @@ installing Docker Desktop, add `~/.docker/bin` to your `PATH`.
 | M2 | Authenticated checkout with Keycloak; order service |
 | M3 | Simulated payments, order expiry and refunds |
 | M4 | Restaurant-owner workflow, admin functions, notifications |
-| M5 | Hardening: Consul discovery, resilience, container images, end-to-end tests |
+| M5 | Hardening: Consul discovery (done early, DEC-019), resilience, container images, end-to-end tests |
 
 Milestone scope is still subject to approval and may change; [`docs/sdd/plan.md`](docs/sdd/plan.md) is the source of truth.
 

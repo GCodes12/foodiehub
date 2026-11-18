@@ -29,6 +29,8 @@ public class SecurityConfig {
         http
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        // DEC-019: Consul's health check (no details; every other actuator endpoint stays denied).
+                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/orders").hasRole("CUSTOMER")
                         .requestMatchers(HttpMethod.GET, "/api/v1/orders", "/api/v1/orders/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/owner/orders").hasRole("RESTAURANT_OWNER")

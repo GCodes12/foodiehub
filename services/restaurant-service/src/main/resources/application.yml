@@ -1,6 +1,19 @@
 spring:
   application:
     name: restaurant-service
+  cloud:
+    # DEC-019: register in Consul; other services and the gateway find this one by name (restaurant-service), never by a fixed URL.
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        # Unique per running instance, so two instances of the same service can register side by side.
+        instance-id: ${spring.application.name}-${server.port}-${random.value}
+        hostname: ${SERVICE_HOSTNAME:localhost}
+        prefer-ip-address: false
+        health-check-path: /actuator/health
+        health-check-interval: 10s
+        health-check-critical-timeout: 60s
   messages:
     # Client-facing texts live in messages.properties. Never pick a bundle from the machine's locale.
     basename: messages
@@ -39,6 +52,16 @@ foodiehub:
     client-id: ${KEYCLOAK_OWNER_PROVISIONER_CLIENT_ID:foodiehub-owner-provisioner}
     client-secret: ${KEYCLOAK_OWNER_PROVISIONER_CLIENT_SECRET:}
     owner-group: ${KEYCLOAK_OWNER_GROUP:restaurant-owners}
+
+management:
+  # DEC-019: only the health endpoint is exposed (Consul's health check). It reveals no details.
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
 
 server:
   port: ${RESTAURANT_SERVICE_PORT:8081}

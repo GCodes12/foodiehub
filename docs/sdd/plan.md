@@ -67,6 +67,9 @@ Select text to add comments on the plan
 > Endpoints: `api-admin.md`.
 > DEC-018 (same day) lets administrators create owner accounts (a separate, group-scoped Keycloak provisioning client)
 > and assign them a restaurant now or later.
+> DEC-019 brings the M5 discovery work forward: the API gateway (D2, D3) and Consul discovery with load balancing are
+> implemented; resilience stays in M5. The backend runs Spring Boot 4.0.9 + Spring Cloud 2025.1.4 (no GA Spring Cloud for
+> Boot 4.1 yet).
 
 ### Part B — safe to keep OPEN until its gate (must be answered before that milestone starts; suggested values are not adopted until answered)
 

@@ -122,6 +122,16 @@ class RestaurantApiIntegrationTest {
         }
     }
 
+    @Test
+    void consulCanCheckHealthButNoOtherActuatorEndpointIsOpen() throws Exception {
+        HttpResponse<String> health = get("/actuator/health");
+        assertThat(health.statusCode()).isEqualTo(200);
+        assertThat(health.body()).contains("\"status\":\"UP\"").doesNotContain("components", "details", "db", "diskSpace"); // no details (DEC-019)
+        for (String path : new String[] {"/actuator/env", "/actuator/beans", "/actuator"}) {
+            assertThat(get(path).statusCode()).as(path).isIn(401, 403, 404);
+        }
+    }
+
     // --- Owner operations against real MySQL (DEC-015; ownership by token subject, DEC-017) -----------------------
 
     private static final String LASSI = "00000000-0000-0000-0001-000000000036"; // Mango Lassi in the seed

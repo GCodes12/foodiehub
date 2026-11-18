@@ -1,6 +1,6 @@
 # FoodieHub — Clarification Log
 
-> **Status: PARTLY ANSWERED.** Owner decisions **DEC-001 – DEC-018** are recorded in §9.2. Everything
+> **Status: PARTLY ANSWERED.** Owner decisions **DEC-001 – DEC-019** are recorded in §9.2. Everything
 > not covered by those decisions remains open. Recommended defaults (§9.1) take effect only when the owner records an
 > answer in §9.2.
 >
@@ -11,7 +11,7 @@
 used exactly as in `raw-requirement.md`. Questions Q-01 – Q-16 are defined there and referenced here. New questions
 continue the same series from **Q-17**. The proposed slice is called **VS-1**, its checkpoints **CP-1 – CP-5**, its draft
 acceptance criteria **VS1-AC1 – VS1-AC9**, the conflicts found here **CC-1 – CC-6**, and the owner decisions
-**DEC-001 – DEC-018** (§9.2). These are distinct from the `raw-requirement.md` findings C-01 – C-17.
+**DEC-001 – DEC-019** (§9.2). These are distinct from the `raw-requirement.md` findings C-01 – C-17.
 
 ---
 
@@ -584,6 +584,26 @@ by Keycloak (409); an account that cannot be confirmed as an owner is deleted ag
 
 **Not decided by DEC-018:** disabling or deleting owner accounts from the app, password resets by administrators, e-mail
 invitations (no mail server), a realm password policy.
+
+#### DEC-019 — Consul discovery, API gateway and load balancing (2026-11-18)
+The owner set the order of the next work: (1) Consul service discovery, load balancing and the gateway, (2) Jenkins and
+SonarQube, (3) Docker. For (1) the owner approved:
+
+1. **Versions:** Spring Cloud has no GA release for Spring Boot 4.1 (2026.0 is RC2), so all backend modules use the
+   supported pair **Spring Boot 4.0.9 + Spring Cloud 2025.1.4**; the full test suite passed on 4.0.9 before Spring
+   Cloud was added. Bump to 4.1 / 2026.0 when that train is GA.
+2. **Consul:** a local development agent (Homebrew, `infra/consul/start-local-consul.sh`); Docker comes with phase 3.
+3. **Resilience** (circuit breakers, retries): deferred.
+
+**Implemented as planned (plan.md D2, D3, M5):** `services/api-gateway` (Spring Cloud Gateway Server Web MVC, port 8090)
+is the only public entry; it routes by path to `lb://order-service` / `lb://restaurant-service`, validates tokens
+(issuer, signature, expiry, audience) before forwarding and passes the `Authorization` header unchanged; services keep
+all role and ownership checks. Both services register in Consul (unique instance ids; health checks on
+`/actuator/health`, the only actuator endpoint exposed, without details). order-service calls restaurant-service by
+service name through Spring Cloud LoadBalancer (round robin). The Vite dev server forwards `/api` to the gateway.
+
+**Not decided by DEC-019:** resilience settings, production Consul (ACLs, TLS, persistence), the load balancer's cache
+(the default is fine for development), rate limiting at the gateway.
 ---
 
 ## 10. Decisions needed next
