@@ -575,5 +575,100 @@ class OrderApiIntegrationTest {
         mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
                 .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"));
     }
-}
 
+    // --- Platform overview for administrators (DEC-017) --------------------------------------------------------------
+
+    private static final SimpleGrantedAuthority ADMIN = new SimpleGrantedAuthority("ROLE_ADMIN");
+
+    private static MockHttpServletRequestBuilder asAdmin(MockHttpServletRequestBuilder request) {
+        return request.with(jwt().jwt(j -> j.subject("sub-admin")).authorities(ADMIN));
+    }
+
+    /** An order of another restaurant, created at the given instant (stored as UTC, like the service does). */
+    private void insertOrder(String id, String restaurantId, String status, String total, java.time.Instant createdAt) {
+        String at = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS").withZone(java.time.ZoneOffset.UTC)
+                .format(createdAt);
+        jdbc.update("INSERT INTO customer_order (id, customer_id, restaurant_id, fulfilment_type, status, currency, subtotal, total,"
+                + " idempotency_key, request_hash, created_at) VALUES (?, 'sub-x', ?, 'PICKUP', ?, 'INR', ?, ?, ?, REPEAT('a', 64), ?)",
+                id, restaurantId, status, new BigDecimal(total), new BigDecimal(total), "key-" + id, at);
+    }
+
+    @Test
+    void customersOwnersAndAnonymousCallersCannotSeeThePlatformOverview() throws Exception {
+        for (String path : List.of("/api/v1/admin/orders", "/api/v1/admin/orders/summary")) {
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+            for (SimpleGrantedAuthority role : List.of(CUSTOMER, OWNER)) {
+                mvc.perform(get(path).with(jwt().authorities(role)))
+                        .andExpect(status().isForbidden())
+                        .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+            }
+        }
+    }
+
+    @Test
+    void anAdminSeesOrdersAcrossRestaurantsNewestFirstWithoutCustomerIdentity() throws Exception {
+        String first = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        Thread.sleep(5);
+        insertOrder("other-1", "other-restaurant", "ACCEPTED", "10.00", java.time.Instant.now());
+
+        mvc.perform(asAdmin(get("/api/v1/admin/orders")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(2))
+                .andExpect(jsonPath("$.items[0].id").value("other-1"))
+                .andExpect(jsonPath("$.items[1].id").value(first))
+                .andExpect(jsonPath("$.items[1].items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].customerId").doesNotExist())
+                .andExpect(jsonPath("$.pageable").doesNotExist());
+
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("restaurantId", RID)))
+                .andExpect(jsonPath("$.totalItems").value(1)).andExpect(jsonPath("$.items[0].id").value(first));
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("status", "ACCEPTED")))
+                .andExpect(jsonPath("$.totalItems").value(1)).andExpect(jsonPath("$.items[0].id").value("other-1"));
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("size", "1").param("page", "1")))
+                .andExpect(jsonPath("$.items.length()").value(1)).andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.items[0].id").value(first));
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("size", "100000")))
+                .andExpect(jsonPath("$.size").value(100));
+    }
+
+    @Test
+    void invalidAdminFiltersAre400() throws Exception {
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("status", "SHIPPED")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("restaurantId", "../x")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+    }
+
+    @Test
+    void theSummaryCountsTodayInIndiaAndExcludesRejectedOrdersFromValue() throws Exception {
+        mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()); // 508.00, today
+        java.time.ZoneId india = java.time.ZoneId.of("Asia/Kolkata");
+        java.time.Instant todayStart = java.time.LocalDate.now(india).atStartOfDay(india).toInstant();
+        insertOrder("yesterday-1", "other-restaurant", "PICKED_UP", "100.00", todayStart.minusSeconds(60)); // 23:59 IST yesterday
+        insertOrder("rejected-1", RID, "REJECTED", "999.00", java.time.Instant.now());
+
+        mvc.perform(asAdmin(get("/api/v1/admin/orders/summary")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalOrders").value(3))
+                .andExpect(jsonPath("$.ordersToday").value(2))
+                .andExpect(jsonPath("$.totalValue").value(608.00))
+                .andExpect(jsonPath("$.valueToday").value(508.00))
+                .andExpect(jsonPath("$.byStatus.PENDING_PAYMENT").value(1))
+                .andExpect(jsonPath("$.byStatus.REJECTED").value(1))
+                .andExpect(jsonPath("$.byStatus.PREPARING").value(0))
+                .andExpect(jsonPath("$.timeZone").value("Asia/Kolkata"))
+                .andExpect(jsonPath("$.restaurants.length()").value(2))
+                .andExpect(jsonPath("$.restaurants[?(@.restaurantId == '" + RID + "')].orders").value(2))
+                .andExpect(jsonPath("$.restaurants[?(@.restaurantId == '" + RID + "')].ordersToday").value(2))
+                .andExpect(jsonPath("$.restaurants[?(@.restaurantId == 'other-restaurant')].ordersToday").value(0));
+    }
+
+    @Test
+    void theSummaryOfAnEmptyPlatformIsZero() throws Exception {
+        mvc.perform(asAdmin(get("/api/v1/admin/orders/summary")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalOrders").value(0))
+                .andExpect(jsonPath("$.totalValue").value(0.00))
+                .andExpect(jsonPath("$.restaurants").isEmpty());
+    }
+}

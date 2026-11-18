@@ -13,6 +13,7 @@ import com.foodiehub.order.restaurant.RestaurantServiceUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.dao.DataAccessException;
@@ -60,6 +61,18 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     protected @Nullable ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         return ResponseEntity.badRequest().body(problem(HttpStatus.BAD_REQUEST, "MALFORMED_REQUEST"));
+    }
+
+    /** A query parameter of the wrong type, e.g. an unknown order status in the administrator list (DEC-017). */
+    @Override
+    protected @Nullable ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
+            HttpStatusCode status, WebRequest request) {
+        return ResponseEntity.badRequest().body(problem(HttpStatus.BAD_REQUEST, "INVALID_QUERY"));
+    }
+
+    @ExceptionHandler(AdminOrderController.InvalidQueryException.class)
+    ProblemDetail invalidQuery() {
+        return problem(HttpStatus.BAD_REQUEST, "INVALID_QUERY");
     }
 
     @ExceptionHandler(InvalidIdempotencyKeyException.class)

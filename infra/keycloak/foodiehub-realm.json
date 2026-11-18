@@ -97,6 +97,46 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "foodiehub-admin-api",
+      "name": "FoodieHub restaurant-service → Keycloak (read-only)",
+      "description": "DEC-017: read-only service account (view users/realm, query users) for restaurant-service; never grants roles. Secret: create-dev-admin.sh (dev) or the admin console (production).",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    },
+    {
+      "clientId": "foodiehub-owner-provisioner",
+      "name": "FoodieHub restaurant-service → Keycloak (owner provisioning)",
+      "description": "DEC-018: creates owner accounts only inside group restaurant-owners (fine-grained permissions). No realm-management roles. Secret: create-dev-admin.sh / admin console.",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-foodiehub-admin-api",
+      "enabled": true,
+      "serviceAccountClientId": "foodiehub-admin-api",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "view-realm"
+        ]
+      }
     }
   ],
   "roles": {
@@ -108,7 +148,20 @@
       {
         "name": "RESTAURANT_OWNER",
         "description": "Manages own restaurants (DEC-015)"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Platform administrator: restaurants, owner assignment, platform overview (DEC-017). Never granted to demo users."
       }
     ]
-  }
+  },
+  "groups": [
+    {
+      "name": "restaurant-owners",
+      "path": "/restaurant-owners",
+      "realmRoles": [
+        "RESTAURANT_OWNER"
+      ]
+    }
+  ]
 }

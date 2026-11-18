@@ -13,11 +13,11 @@ export interface AuthSnapshot {
   displayName: string | null;
   /** true after a session ended on its own (refresh failed, or the API answered 401). */
   sessionExpired: boolean;
-  /** Keycloak realm roles of the signed-in user (DEC-015): CUSTOMER, RESTAURANT_OWNER. */
+  /** Keycloak realm roles of the signed-in user (DEC-015, DEC-017): CUSTOMER, RESTAURANT_OWNER, ADMIN. */
   roles: string[];
 }
 
-export type Role = 'CUSTOMER' | 'RESTAURANT_OWNER';
+export type Role = 'CUSTOMER' | 'RESTAURANT_OWNER' | 'ADMIN';
 
 let keycloak: Keycloak | null = null;
 let snapshot: AuthSnapshot = { available: false, signedIn: false, username: null, displayName: null, sessionExpired: false, roles: [] };

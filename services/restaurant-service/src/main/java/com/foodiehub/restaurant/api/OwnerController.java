@@ -19,7 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Owner endpoints (DEC-015). Require a token with the RESTAURANT_OWNER role (SecurityConfig). The caller is the
- * token's username; restaurants and dishes the caller does not manage answer 404.
+ * token's stable subject ({@code sub}, DEC-017), never the username; restaurants and dishes the caller does not manage
+ * answer 404.
  *   GET   /api/v1/owner/restaurants                                   restaurants I manage
  *   GET   /api/v1/owner/restaurants/{restaurantId}/menu               the full menu (same shape as the public menu)
  *   PATCH /api/v1/owner/restaurants/{restaurantId}/menu-items/{id}    change availability, price, description, labels
@@ -43,12 +44,12 @@ class OwnerController {
 
     @GetMapping
     List<OwnerRestaurantResponse> myRestaurants(@AuthenticationPrincipal Jwt jwt) {
-        return catalog.ownedRestaurants(username(jwt)).stream().map(OwnerRestaurantResponse::from).toList();
+        return catalog.ownedRestaurants(subject(jwt)).stream().map(OwnerRestaurantResponse::from).toList();
     }
 
     @GetMapping("/{restaurantId}/menu")
     MenuResponse menu(@AuthenticationPrincipal Jwt jwt, @PathVariable String restaurantId) {
-        return catalog.menuOfOwnedRestaurant(restaurantId, username(jwt))
+        return catalog.menuOfOwnedRestaurant(restaurantId, subject(jwt))
                 .map(items -> MenuResponse.of(restaurantId, items))
                 .orElseThrow(RestaurantNotFoundException::new);
     }
@@ -62,17 +63,17 @@ class OwnerController {
         if (changes.isEmpty()) {
             throw new NothingToUpdateException();
         }
-        return catalog.updateMenuItem(restaurantId, menuItemId, username(jwt), changes)
+        return catalog.updateMenuItem(restaurantId, menuItemId, subject(jwt), changes)
                 .map(MenuResponse.Item::from)
                 .orElseThrow(MenuItemNotFoundException::new);
     }
 
-    private static String username(Jwt jwt) {
-        String username = jwt.getClaimAsString("preferred_username");
-        if (username == null || username.isBlank()) {
-            throw new AccessDeniedException("token has no username");
+    private static String subject(Jwt jwt) {
+        String subject = jwt.getSubject();
+        if (subject == null || subject.isBlank()) {
+            throw new AccessDeniedException("token has no subject");
         }
-        return username;
+        return subject;
     }
 
     static class MenuItemNotFoundException extends RuntimeException {

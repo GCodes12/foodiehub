@@ -98,3 +98,100 @@ export interface MenuItemChanges {
   bestseller?: boolean;
   chefSpecial?: boolean;
 }
+
+// --- Platform administration (DEC-017) ---
+
+/** One page of an administrator list. */
+export interface PageResponse<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+/** Restaurant counts (restaurant_db) and people counts (Keycloak; null when the sign-in service can't be asked). */
+export interface AdminDashboard {
+  totalRestaurants: number;
+  activeRestaurants: number;
+  inactiveRestaurants: number;
+  totalOwners: number | null;
+  totalCustomers: number | null;
+  userDirectoryAvailable: boolean;
+  /** false when the server has no owner-provisioning client configured: owners can be assigned but not created. */
+  ownerProvisioningConfigured: boolean;
+}
+
+/** `sub` is null for an assignment made before ownership moved to account ids: it grants nothing until re-assigned. */
+export interface AdminOwnerLink {
+  sub: string | null;
+  username: string;
+  assignedAt: string;
+  needsReassignment: boolean;
+}
+
+export interface AdminRestaurantSummary {
+  id: string;
+  name: string;
+  city: string | null;
+  active: boolean;
+  owner: AdminOwnerLink | null;
+  dishes: number;
+  availableDishes: number;
+  updatedAt: string;
+}
+
+export interface AdminRestaurant extends AdminRestaurantSummary {
+  description: string | null;
+  address: string | null;
+  phone: string | null;
+  createdAt: string;
+  version: number;
+}
+
+/** Editable restaurant details. On edit, only the fields present change; an empty string clears an optional field. */
+export interface RestaurantDetailsInput {
+  name?: string;
+  description?: string;
+  address?: string;
+  city?: string;
+  phone?: string;
+}
+
+export interface OwnerAccount {
+  sub: string;
+  username: string;
+  displayName: string | null;
+  /** Shown to administrators for owner accounts only (DEC-018). */
+  email: string | null;
+  enabled: boolean;
+  /** The owner still has to replace the temporary password at first login. */
+  passwordChangePending: boolean;
+  restaurants: OwnedRestaurant[];
+}
+
+/** A new owner account (DEC-018). No role field: the server always creates a restaurant owner. */
+export interface CreateOwnerInput {
+  fullName: string;
+  email: string;
+  username: string;
+  temporaryPassword: string;
+}
+
+export interface RestaurantActivity {
+  restaurantId: string;
+  orders: number;
+  ordersToday: number;
+  lastOrderAt: string | null;
+}
+
+export interface AdminOrderSummary {
+  totalOrders: number;
+  ordersToday: number;
+  totalValue: number;
+  valueToday: number;
+  byStatus: Partial<Record<OrderStatus, number>>;
+  restaurants: RestaurantActivity[];
+  todayStartsAt: string;
+  timeZone: string;
+}

@@ -7,7 +7,9 @@ hands-on way to practise microservice design, OAuth2/OIDC security, and Spec-Dri
 > Indian restaurant with biryani as its signature (DEC-014). Customers browse the 42-dish menu, sign in with Keycloak,
 > check out a pickup order and follow it live; the restaurant owner manages the menu and moves orders through
 > Accepted → Preparing → Ready → Picked up (DEC-015, DEC-016). It runs locally against MySQL. **No online payment**:
-> an accepted order is paid at the counter. The gateway is not built yet (the Vite dev proxy stands in for it).
+> an accepted order is paid at the counter. A platform **administrator** creates, edits, activates and deactivates
+> restaurants, assigns owners and sees a platform overview (DEC-017). The gateway is not built yet (the Vite dev proxy
+> stands in for it).
 
 | Home | Menu | Dish detail |
 |---|---|---|
@@ -28,6 +30,10 @@ All demo passwords are `FOODIEHUB_DEMO_USER_PASSWORD` from `.env`.
 5. **Owner**, *Menu* tab: switch **Phirni** to available or change a price → the customer's menu shows it on reload.
 6. Try the rules: the owner can't check out (customer accounts only); a second *Accept* on the same order is refused;
    *Reject* asks for an optional reason that the customer then sees.
+7. **Admin** (dev admin from step 7a): *Admin* → Dashboard (counts, recent orders, activity) → *Restaurants* → ZAYORA →
+   *Owner*: choose `owner` → **Change owner**. ⚠️ Do this once after upgrading to DEC-017: until then the owner's
+   Kitchen is empty, because owner links made by username no longer grant access (they now use the account id).
+   Then try *New restaurant* (it starts inactive and can't be activated without a dish) and *Deactivate* (asks first).
 
 ## Planned MVP scope
 
@@ -67,12 +73,12 @@ condition that a compatible Spring Cloud release train is confirmed first.
 | Item | Status |
 |---|---|
 | Current phase | **VS-1, CP-1 – CP-5** — browse, sign in, place a pickup order, view your own order (web app + backend) |
-| Restaurant service | Implemented: list, detail and menu endpoints (menu items carry category, description, diet, bestseller / chef-special labels and an image key, DEC-014); Flyway schema V1–V2; ZAYORA seed (42 dishes); tests |
-| Order service | Implemented: `POST /api/v1/orders` (server pricing, snapshots, one transaction, idempotent) `GET /api/v1/orders/{id}` (owner only) and `GET /api/v1/orders` (the customer's own orders, newest first, DEC-014); tests |
-| Frontend | Implemented ([`frontend/`](frontend/)): ZAYORA web app — React + Vite + React Router; home, menu (categories, search, veg/egg/non-veg filter, price sort, dish detail), cart, protected checkout with a retry-safe `Idempotency-Key`, order confirmation, My Orders; Keycloak sign-in (PKCE); 65 tests |
+| Restaurant service | Implemented: list, detail and menu endpoints (menu items carry category, description, diet, bestseller / chef-special labels and an image key, DEC-014); owner endpoints (DEC-015, ownership by account id since DEC-017); administrator endpoints (DEC-017); Flyway schema V1–V4; ZAYORA seed (42 dishes); tests |
+| Order service | Implemented: `POST /api/v1/orders` (server pricing, snapshots, one transaction, idempotent) `GET /api/v1/orders/{id}` (owner only) and `GET /api/v1/orders` (the customer's own orders, newest first, DEC-014); owner order list and lifecycle (DEC-015, DEC-016); read-only administrator overview (DEC-017); Flyway V1–V3; tests |
+| Frontend | Implemented ([`frontend/`](frontend/)): ZAYORA web app — React + Vite + React Router; home, menu (categories, search, veg/egg/non-veg filter, price sort, dish detail), cart, protected checkout with a retry-safe `Idempotency-Key`, order confirmation, My Orders, owner Kitchen, admin pages (`/admin`); Keycloak sign-in (PKCE); 122 tests |
 | Gateway, payment/notification services | Not started. In development the Vite proxy routes `/api/v1/*` to the services |
 | Build files | Maven Wrapper + root aggregator POM; Docker Compose for MySQL only. CI pipelines: not created |
-| Security controls | Keycloak realm `foodiehub` with roles `CUSTOMER` and `RESTAURANT_OWNER` (DEC-015); both services validate JWTs (issuer, signature, audience); only customers order; owners manage only their own restaurant; customers see only their own orders. Browsing stays public by design. **Not implemented:** gateway, admin role, authentication of the internal price lookup (SEC-005) |
+| Security controls | Keycloak realm `foodiehub` with roles `CUSTOMER`, `RESTAURANT_OWNER` (DEC-015) and `ADMIN` (DEC-017); both services validate JWTs (issuer, signature, audience); only customers order; owners manage only their own restaurant (by account id); customers see only their own orders; admin endpoints need `ADMIN`; the application never grants roles (read-only Keycloak service account). Browsing stays public by design. **Not implemented:** gateway, authentication of the internal price lookup (SEC-005) |
 | Payments | **Not available.** No payment processing of any kind exists |
 | Documentation | SDD documents in [`docs/sdd/`](docs/sdd/) |
 
@@ -249,6 +255,43 @@ infra/keycloak/create-dev-users.sh        # in a second terminal (safe to re-run
 - Tokens carry the audience `order-service`; the order service rejects tokens without it, tokens from other realms,
   and tokens with a bad signature or expired lifetime (15 minutes).
 
+#### 7a. Administrator (DEC-017) — development only
+
+The `ADMIN` role and a local administrator are created by one explicit script; demo users never get `ADMIN`.
+
+1. Add these lines to your `.env` (see [`.env.example`](.env.example); choose your own values, never commit them):
+   ```
+   KEYCLOAK_ADMIN_API_CLIENT_SECRET=<a long random value, at least 24 characters>
+   FOODIEHUB_DEV_ADMIN_USERNAME=admin.dev        # must not be alice, bob or owner
+   FOODIEHUB_DEV_ADMIN_PASSWORD=<at least 8 characters>
+   # optional, lets admins create owner accounts (DEC-018); a different long random value
+   KEYCLOAK_OWNER_PROVISIONER_CLIENT_SECRET=<another value, at least 24 characters>
+   ```
+   One way to make a secret: `openssl rand -base64 32`.
+2. With Keycloak running: `infra/keycloak/create-dev-admin.sh` (safe to re-run). It creates the realm role `ADMIN`, the
+   confidential client `foodiehub-admin-api` with the secret from `.env`, gives that client's service account **read-only**
+   access (`view-users`, `query-users`, `view-realm`: it can list and look up users, never change them or their roles),
+   and creates the admin user with `ADMIN` only. With `KEYCLOAK_OWNER_PROVISIONER_CLIENT_SECRET` it also creates the
+   group `restaurant-owners` and the client `foodiehub-owner-provisioner`, which has **no** realm-management roles and,
+   through Keycloak's fine-grained admin permissions, may only create accounts inside that group (it cannot grant roles
+   or touch any other account).
+3. Restart the restaurant service so it reads the secrets (the read-only client lists owners, checks assignments and
+   counts users; the provisioning client creates owner accounts; without a secret its features answer 503 and
+   everything else works).
+4. Log in as the admin user at http://localhost:5173 → **Admin**. Re-assign ZAYORA's owner once (Demo step 7).
+5. **Onboard a new owner:** *Admin* → *Owners* → **Create owner** (full name, e-mail, username, temporary password;
+   optionally pick a restaurant). Give the temporary password to the owner securely; at their first login Keycloak asks
+   them to choose a new one, then the Kitchen shows the assigned restaurant. No restaurant chosen? Assign it later
+   from the restaurant page.
+
+**Production is different:** never run this script there. Create administrator accounts by hand in the Keycloak admin
+console (with a strong password policy and MFA), create the `foodiehub-admin-api` client secret there, and give it to
+the restaurant service through your secret store. For in-app owner creation, also create the group
+`restaurant-owners` (role `RESTAURANT_OWNER`), the client `foodiehub-owner-provisioner` (service account, no
+realm-management roles), enable *Admin permissions* in the realm settings and add a Groups permission for that client
+on the group (view, view-members, manage-members, manage-membership); or leave the secret out and create owners in the
+Keycloak console. Either way the application never grants roles.
+
 #### 8. Start the order service (CP-3, CP-4)
 
 The order service needs MySQL (`order_db`), Keycloak and the restaurant service (for prices) to be running.
@@ -345,12 +388,14 @@ details. Browsing is public; **Checkout** and **My Orders** ask you to log in (u
 | User | Role | Can |
 |---|---|---|
 | `alice`, `bob` | `CUSTOMER` | browse, order (only customers may order: Q-23), see their own orders |
+| your dev admin (step 7a) | `ADMIN` | **Admin** (`/admin`): dashboard counts, restaurants (create, edit, activate / deactivate, assign owner), owner accounts (list, **create**), orders across restaurants (read-only). Cannot order or use the Kitchen. API: [`docs/sdd/api-admin.md`](docs/sdd/api-admin.md) |
 | `owner` | `RESTAURANT_OWNER` | **Kitchen** dashboard (`/kitchen`): mark dishes available / sold out, edit price, description and labels; **manage orders**: accept or reject (optional reason), start preparing, mark ready, picked up; Active and History lists (refresh every 20 s). Cannot order (403). |
 
 The owner is linked to ZAYORA in `restaurant_db.restaurant_owner` (dev seed). Owner API: `GET /api/v1/owner/restaurants`,
 `GET /api/v1/owner/restaurants/{id}/menu`, `PATCH /api/v1/owner/restaurants/{id}/menu-items/{itemId}` (Restaurant Service,
 token audience `restaurant-service`) and `GET /api/v1/owner/orders` (Order Service). Not built yet: order status
-changes beyond the flow below, adding or removing dishes, admin.
+changes beyond the flow below, adding or removing dishes. Since DEC-017 an owner is identified by account id (`sub`):
+an administrator assigns owners (`/admin`); the seeded username link grants nothing until re-assigned.
 
 **Order lifecycle (DEC-016):** `PENDING_PAYMENT → ACCEPTED | REJECTED`, then `PREPARING → READY_FOR_PICKUP →
 PICKED_UP`. An accepted order is **paid at the counter** (no online payment). Owners change status with
@@ -360,7 +405,8 @@ is recorded in `order_db.order_status_change`. Customers see the progress tracke
 My Orders, refreshed every 20 s while the order is in progress.
 
 - Port **5173 is required**: Keycloak only accepts sign-in redirects to `http://localhost:5173`.
-- The dev server forwards `/api/v1/restaurants` to port 8081 and `/api/v1/orders` to port 8082 (`vite.config.ts`;
+- The dev server forwards `/api/v1/restaurants`, `/api/v1/owner/restaurants` and `/api/v1/admin` to port 8081, and
+  `/api/v1/orders`, `/api/v1/owner/orders` and `/api/v1/admin/orders` to port 8082 (`vite.config.ts`;
   override with `RESTAURANT_SERVICE_URL` / `ORDER_SERVICE_URL`). The browser never calls the services directly.
 - Optional browser settings are in [`frontend/.env.example`](frontend/.env.example): service base URLs
   (`VITE_RESTAURANT_API_URL`, `VITE_ORDER_API_URL`; direct URLs need CORS on the services), `VITE_RESTAURANT_ID`, and
@@ -406,10 +452,12 @@ through the service's token checks and expects `401` for a forged signature, a m
 the wrong issuer, a wrong or missing audience, an unsigned token and a malformed token. Tokens from the running
 Keycloak are checked manually with steps 7–9.
 
-Frontend: `cd frontend && npm test` runs 65 tests: cart limits, totals and live-menu checks; menu search, category
+Frontend: `cd frontend && npm test` runs 136 tests: cart limits, totals and live-menu checks; menu search, category
 and diet filters and sorting; retry-safe idempotency keys; the API client (tokens, base URLs, Problem Details, expired
-sessions); messages; and rendered components (navbar, dish card, menu, protected routes, cart and checkout, order
-confirmation, error messages). Clicking through in a real browser is manual (step 10); browser end-to-end tests
+sessions, admin calls); messages; admin form checks and dashboard figures; and rendered components (navbar, dish
+card, menu, protected routes including `/admin`, cart and checkout, order confirmation, kitchen, admin tables and
+cards, error messages). Components are rendered to static HTML, so clicks and data loading in the browser are checked
+manually. Clicking through in a real browser is manual (step 10); browser end-to-end tests
 (Playwright) are planned for M5.
 
 #### Optional Docker setup
@@ -450,8 +498,9 @@ Currently available:
 
 - [`docs/sdd/plan.md`](docs/sdd/plan.md) — the overall plan, approval checklist, architecture and milestones.
 - [`docs/sdd/raw-requirement.md`](docs/sdd/raw-requirement.md) — reconstructed owner requirements.
-- [`docs/sdd/clarification.md`](docs/sdd/clarification.md) — open questions and recorded owner decisions (DEC-001 – DEC-012).
+- [`docs/sdd/clarification.md`](docs/sdd/clarification.md) — open questions and recorded owner decisions (DEC-001 – DEC-017).
+- [`docs/sdd/api-admin.md`](docs/sdd/api-admin.md) — administrator API (DEC-017).
 - [`docs/sdd/spec.md`](docs/sdd/spec.md) — VS-1 specification (draft).
 - [`docs/sdd/data-model.md`](docs/sdd/data-model.md) — logical data model (draft).
 
-API contracts, ADRs, tasks, test strategy and DevOps documents do not exist yet.
+Other API contracts, ADRs, tasks, test strategy and DevOps documents do not exist yet.

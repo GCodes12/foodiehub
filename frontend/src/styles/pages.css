@@ -2098,3 +2098,172 @@
     --plate: 74px;
   }
 }
+
+/* Platform admin (DEC-017): reuses cards, tabs, owner stats and form fields; only layout and tables are new. */
+.admin-tabs {
+  margin-bottom: var(--space-5);
+}
+
+.admin-stats {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.admin-columns {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+@media (min-width: 960px) {
+  .admin-columns {
+    grid-template-columns: 3fr 2fr;
+    align-items: start;
+  }
+}
+
+.admin-stack {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.admin-form-grid {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+@media (min-width: 720px) {
+  .admin-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .admin-form-grid .field-wide {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+}
+
+.input-plain input {
+  padding-left: 12px;
+}
+
+.select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--charcoal);
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+.admin-owner-pick {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.admin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.admin-filters .field {
+  min-width: 200px;
+}
+
+.admin-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-list-row:last-child {
+  border-bottom: 0;
+}
+
+.admin-list-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  margin-bottom: var(--space-4);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.data-table th {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.data-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table a {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.warning-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+/* Owner accounts (DEC-018) */
+.password-field input {
+  padding-right: 44px;
+}
+
+.password-field .icon-button {
+  position: absolute;
+  right: 4px;
+}

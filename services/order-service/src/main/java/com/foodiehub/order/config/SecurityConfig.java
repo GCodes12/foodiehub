@@ -17,7 +17,8 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 /**
  * Every order endpoint requires a valid Keycloak access token (RR-007, FR-011, SEC-001): issuer = FoodieHub realm,
  * audience = order-service (application.yml). Roles (DEC-015): only CUSTOMER may place orders (Q-23); any signed-in
- * user may read their own orders; the owner order list needs RESTAURANT_OWNER. Everything else is denied.
+ * user may read their own orders; the owner order list needs RESTAURANT_OWNER; the read-only platform overview needs
+ * ADMIN (DEC-017). Everything else is denied.
  * Stateless bearer-token API, so no session and no CSRF token.
  */
 @Configuration
@@ -32,6 +33,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/orders", "/api/v1/orders/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/v1/owner/orders").hasRole("RESTAURANT_OWNER")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/owner/orders/*/status").hasRole("RESTAURANT_OWNER")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/admin/orders", "/api/v1/admin/orders/summary").hasRole("ADMIN")
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(KeycloakRoles.authenticationConverter()))

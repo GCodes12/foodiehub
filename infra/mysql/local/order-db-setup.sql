@@ -2,7 +2,8 @@
 --
 -- Creates order_db and two accounts:
 --   * order migrator — used by Flyway: DDL plus DML on order_db only;
---   * order app      — used by the running service: SELECT and INSERT only (VS-1 never updates or deletes orders).
+--   * order app      — used by the running service: SELECT and INSERT, plus UPDATE on customer_order for owner
+--                      status changes (DEC-016). Never DELETE.
 -- Accounts are created for 'localhost' and '127.0.0.1', never for '%'. Nothing is dropped; existing accounts keep
 -- their passwords. Set the passwords first in the same session (variable names differ from the restaurant script):
 --   SET @order_migrator_password = '...';  SET @order_app_password = '...';
@@ -36,10 +37,14 @@ SET @sql = CONCAT('CREATE USER IF NOT EXISTS ', QUOTE(@order_app_user), '@''loca
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql = CONCAT('GRANT SELECT, INSERT ON order_db.* TO ', QUOTE(@order_app_user), '@''localhost''');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = CONCAT('GRANT UPDATE ON order_db.customer_order TO ', QUOTE(@order_app_user), '@''localhost''');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 SET @sql = CONCAT('CREATE USER IF NOT EXISTS ', QUOTE(@order_app_user), '@''127.0.0.1'' IDENTIFIED BY ', QUOTE(@order_app_password));
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @sql = CONCAT('GRANT SELECT, INSERT ON order_db.* TO ', QUOTE(@order_app_user), '@''127.0.0.1''');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+SET @sql = CONCAT('GRANT UPDATE ON order_db.customer_order TO ', QUOTE(@order_app_user), '@''127.0.0.1''');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 SET @order_migrator_password = NULL, @order_app_password = NULL, @sql = NULL;

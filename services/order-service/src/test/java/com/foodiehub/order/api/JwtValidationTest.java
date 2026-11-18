@@ -58,7 +58,7 @@ import org.springframework.test.web.servlet.MvcResult;
  * key source differs from production: a local JWK Set endpoint replaces Keycloak's, so no Keycloak is needed.
  * (The other API tests use the jwt() shortcut, which bypasses decoding; this class covers what it skips.)
  */
-@WebMvcTest(OrderController.class)
+@WebMvcTest({OrderController.class, AdminOrderController.class})
 @Import(SecurityConfig.class)
 class JwtValidationTest {
 
@@ -91,6 +91,9 @@ class JwtValidationTest {
 
     @MockitoBean
     com.foodiehub.order.order.OrderLifecycle lifecycle;
+
+    @MockitoBean
+    com.foodiehub.order.order.AdminOrderOverview overview;
 
     // --- The positive control: without it, the 401 cases below would prove nothing ----------------------------
 
@@ -180,6 +183,37 @@ class JwtValidationTest {
 
         verify(orderService, never()).create(any());
         verify(orderService, never()).findOwnOrder(anyString(), anyString());
+    }
+
+    // --- Administrator endpoints (DEC-017): the same token checks, plus the ADMIN role --------------------------------
+
+    private static String tokenWithRoles(String... roles) throws JOSEException {
+        return sign(SIGNING_KEY, claims().claim("realm_access", java.util.Map.of("roles", List.of(roles))).build());
+    }
+
+    @Test
+    void aValidAdminTokenReachesThePlatformOverview() throws Exception {
+        given(overview.summary()).willReturn(new com.foodiehub.order.order.AdminOrderOverview.Summary(0, 0,
+                java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO, java.util.Map.of(), List.of(), Instant.now(), "Asia/Kolkata"));
+        mvc.perform(get("/api/v1/admin/orders/summary").header(HttpHeaders.AUTHORIZATION, bearer(tokenWithRoles("ADMIN"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void validCustomerAndOwnerTokensAreForbiddenOnThePlatformOverview() throws Exception {
+        for (String role : List.of("CUSTOMER", "RESTAURANT_OWNER")) {
+            mvc.perform(get("/api/v1/admin/orders/summary").header(HttpHeaders.AUTHORIZATION, bearer(tokenWithRoles(role))))
+                    .andExpect(status().isForbidden());
+        }
+        verifyNoInteractions(overview);
+    }
+
+    @ParameterizedTest
+    @EnumSource(BadToken.class)
+    void rejectsAnInvalidTokenOnThePlatformOverview(BadToken kind) throws Exception {
+        mvc.perform(get("/api/v1/admin/orders").header(HttpHeaders.AUTHORIZATION, bearer(token(kind))))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(overview);
     }
 
     // --- Helpers ------------------------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # FoodieHub — Clarification Log
 
-> **Status: PARTLY ANSWERED.** Owner decisions **DEC-001 – DEC-016** are recorded in §9.2. Everything
+> **Status: PARTLY ANSWERED.** Owner decisions **DEC-001 – DEC-018** are recorded in §9.2. Everything
 > not covered by those decisions remains open. Recommended defaults (§9.1) take effect only when the owner records an
 > answer in §9.2.
 >
@@ -11,7 +11,7 @@
 used exactly as in `raw-requirement.md`. Questions Q-01 – Q-16 are defined there and referenced here. New questions
 continue the same series from **Q-17**. The proposed slice is called **VS-1**, its checkpoints **CP-1 – CP-5**, its draft
 acceptance criteria **VS1-AC1 – VS1-AC9**, the conflicts found here **CC-1 – CC-6**, and the owner decisions
-**DEC-001 – DEC-016** (§9.2). These are distinct from the `raw-requirement.md` findings C-01 – C-17.
+**DEC-001 – DEC-018** (§9.2). These are distinct from the `raw-requirement.md` findings C-01 – C-17.
 
 ---
 
@@ -533,6 +533,57 @@ only); a status-history table (who, when, from, to, reason); an invalid move or 
 expected current status) is refused with 409; customers see updates by polling (no push notifications).
 
 **Not decided by DEC-016:** customer cancellation, timeouts or automatic expiry, payment, refunds, notifications.
+
+#### DEC-017 — Platform administrator role (US-09) (2026-11-18)
+The owner requested an `ADMIN` role with an admin dashboard (restaurant management, owner assignment, platform
+overview) and approved the implementation plan with these answers:
+
+1. **D1 — user data:** restaurant-service reads Keycloak through a **read-only** service account (confidential client
+   `foodiehub-admin-api`; realm-management `view-users`, `query-users`, `view-realm` — the last is required by Keycloak
+   to list the members of a role). The application **never grants or removes roles**; making an account a restaurant
+   owner happens in the Keycloak admin console. An owner assignment is accepted only for an enabled account that holds
+   `RESTAURANT_OWNER` (checked with Keycloak; otherwise 422 `INVALID_OWNER`).
+2. **D2 — ownership by `sub`:** restaurant ownership uses the owner's stable token subject, not the username. Links made
+   before DEC-017 keep their username as a label but match nobody (fail closed) until an administrator assigns the owner
+   again.
+3. **D3 — customer site:** pinned to ZAYORA's id (`VITE_RESTAURANT_ID` overrides), so restaurants an administrator
+   activates never replace it.
+4. Also approved: fixing the order-service runtime grant (`UPDATE` on `customer_order`, needed since DEC-016).
+
+**Implementation defaults presented with the plan (not objected to):** ADMIN is read-only for orders and menus; new
+restaurants start inactive and can be activated only with at least one available dish; restaurants are never deleted
+(soft deactivation); one owner per restaurant (one owner may manage several); "today" = Asia/Kolkata; the new
+restaurant details (description, address, city, phone) are admin-only (the public API is unchanged); a development
+administrator is created only by `infra/keycloak/create-dev-admin.sh` from `.env` values, never for demo users.
+
+**Not decided by DEC-017:** adding or removing dishes, a customer-facing restaurant list, removing an owner without a
+replacement, administrator actions on orders, audit-log storage (changes are logged, not stored).
+
+#### DEC-018 — Administrators create restaurant owner accounts (2026-11-18)
+The owner asked for the onboarding workflow (create an owner account, then assign it a restaurant now or later) without
+silently widening the read-only service account. Measured against Keycloak 26.8.1 before deciding: a client with
+`manage-users` could grant `ADMIN` to any account (including itself) and reset any password, so it was rejected. The
+owner approved:
+
+1. **D5 — provisioning:** a separate confidential client `foodiehub-owner-provisioner` with **no realm-management roles**.
+   Keycloak fine-grained admin permissions (v2) give it only `view`, `view-members`, `manage-members` and
+   `manage-membership` on the group `restaurant-owners`, which carries `RESTAURANT_OWNER`. It can create accounts only
+   inside that group; it cannot grant roles, add existing users to the group, or read or change any account outside it
+   (verified by `OwnerProvisioningKeycloakTest`). **Residual risk:** a leaked secret can manage the accounts created this
+   way (members of the group). Without the secret, owner creation is disabled.
+2. **D6 — assignment:** the frontend creates the owner, then calls the existing `PUT /restaurants/{id}/owner`
+   (its Keycloak check is reused); a failed assignment after a successful creation is shown with a retry.
+3. **D7:** administrators see owner e-mail addresses; customer e-mail addresses stay hidden.
+4. **D8:** an integration test against a real Keycloak (Testcontainers) runs the project's setup scripts and the full
+   create → first login → assign → Kitchen flow.
+
+**Implementation details (proposals, not objected to):** the temporary password must be replaced at first login
+(Keycloak `UPDATE_PASSWORD`); usernames are 3–50 lower-case `[a-z0-9._-]`, never `service-account-…`; temporary passwords
+are 10–64 characters and must not contain the username; duplicates are checked through the read-only client and again
+by Keycloak (409); an account that cannot be confirmed as an owner is deleted again.
+
+**Not decided by DEC-018:** disabling or deleting owner accounts from the app, password resets by administrators, e-mail
+invitations (no mail server), a realm password policy.
 ---
 
 ## 10. Decisions needed next

@@ -59,6 +59,14 @@ Select text to add comments on the plan
 > `RESTAURANT_OWNER` exist; the administrator role and US-09 do not. Payment (M3), notifications (US-08), delivery
 > (US-10), cancellation (US-05) and the gateway are unchanged and not started. The customer frontend is branded
 > ZAYORA. The milestone definitions below are otherwise unchanged.
+>
+> **Implementation status note (2026-11-18):** DEC-017 adds the `ADMIN` role and most of US-09: administrators create,
+> edit, activate and deactivate restaurants, assign or re-assign owners (verified with Keycloak; roles are never granted
+> by the application), and see a platform overview (counts, orders across restaurants, per-restaurant activity).
+> Ownership moved from username to the token `sub`. Failed-refund handling (the rest of US-09) waits for payment (M3).
+> Endpoints: `api-admin.md`.
+> DEC-018 (same day) lets administrators create owner accounts (a separate, group-scoped Keycloak provisioning client)
+> and assign them a restaurant now or later.
 
 ### Part B — safe to keep OPEN until its gate (must be answered before that milestone starts; suggested values are not adopted until answered)
 

@@ -2,7 +2,7 @@
 
 **Status:** DRAFT  
 **Scope:** VS-1 (Vertical Slice 1) and the increment after it (DEC-014 – DEC-016)  
-**Decision baseline:** DEC-001–DEC-016 (DEC-013 – DEC-016 applied 2026-11-06)  
+**Decision baseline:** DEC-001–DEC-017 (DEC-013 – DEC-016 applied 2026-11-06; DEC-017 applied 2026-11-18)  
 **Purpose:** Describe the logical data model and proposed persistence structure for FoodieHub.
 
 ---
@@ -76,6 +76,10 @@ Represents a restaurant available for browsing and ordering.
 - `active` is required.
 
 Restaurant ownership, administration, and restaurant-management functionality are outside the VS-1 data model scope.
+
+**Restaurant details (DEC-017):** V4 adds administrator-maintained, optional `description` (≤ 500), `address` (≤ 300),
+`city` (≤ 100), `phone` (≤ 20), plus `created_at`, `updated_at` and `version` (optimistic locking). New restaurants
+start inactive; restaurants are deactivated, never deleted. The public API still exposes only id and name.
 
 ### 3.2 MenuItem
 
@@ -205,18 +209,20 @@ The snapshots and exact persistence representation are proposed design choices, 
 
 The order's line-amount formula, total formula, validation limits, and monetary rounding behavior must be finalized through the specification decisions before implementation (BR-009, BR-010: PROPOSED [PENDING Q-20, A-3]; BR-007 business limit: OPEN; BR-008 technical bounds: Q-30; rounding: Q-14).
 
-### 3.5 RestaurantOwner (DEC-015)
+### 3.5 RestaurantOwner (DEC-015, DEC-017)
 
 Links a signed-in owner to a restaurant they manage. Owned by Restaurant Service.
 
 | Attribute | Type | Description |
 |---|---|---|
-| restaurant_id | Identifier | The restaurant (foreign key, same service) |
-| owner_username | String | Keycloak username of the owner |
+| restaurant_id | Identifier | The restaurant (primary key; foreign key, same service) |
+| owner_sub | String, optional | The owner's stable Keycloak subject (`sub`); the only value used for authorization (DEC-017) |
+| owner_username | String | Display label copied from Keycloak at assignment time; never used for authorization |
+| assigned_at | Timestamp | When the owner was (re-)assigned |
 
-**Owner-decided:** owners manage their own restaurants only; the demo user `owner` manages ZAYORA (DEC-015).
-**Proposed:** identifying the owner by username (an admin assigns owners later, US-09; switching to the immutable
-user ID is recommended then). Primary key (`restaurant_id`, `owner_username`).
+**Owner-decided:** owners manage their own restaurants only (DEC-015); ownership by subject, and links made before
+DEC-017 (no subject) grant nothing until an administrator assigns the owner again (DEC-017, D2). One owner per
+restaurant; one owner may manage several restaurants (V4 makes `restaurant_id` the primary key).
 
 ### 3.6 OrderStatusChange (DEC-016)
 

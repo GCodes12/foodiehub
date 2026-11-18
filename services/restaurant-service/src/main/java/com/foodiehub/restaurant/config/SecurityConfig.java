@@ -17,7 +17,7 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 /**
  * Browsing stays public (DEC-009): GET /api/v1/restaurants/** needs no token. The owner endpoints (DEC-015) need a
  * valid FoodieHub token (issuer, signature, audience restaurant-service: application.yml) with the RESTAURANT_OWNER
- * realm role. Everything else is denied. Stateless, so no session and no CSRF token.
+ * realm role; the administrator endpoints (DEC-017) need the ADMIN realm role. Everything else is denied. Stateless, so no session and no CSRF token.
  */
 @Configuration
 public class SecurityConfig {
@@ -29,6 +29,7 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/restaurants", "/api/v1/restaurants/**").permitAll()
                         .requestMatchers("/api/v1/owner/**").hasRole("RESTAURANT_OWNER")
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(KeycloakRoles.authenticationConverter()))

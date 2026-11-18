@@ -20,6 +20,8 @@ export const ALICE: AuthContextValue = { ...SIGNED_OUT, signedIn: true, username
 
 export const OWNER: AuthContextValue = { ...SIGNED_OUT, signedIn: true, username: 'owner', displayName: 'Owner', roles: ['RESTAURANT_OWNER'] };
 
+export const ADMIN: AuthContextValue = { ...SIGNED_OUT, signedIn: true, username: 'admin.dev', displayName: 'Admin', roles: ['ADMIN'] };
+
 export function cartValue(cart: Cart = emptyCart()): CartContextValue {
   return {
     cart, count: itemCount(cart), totalPaise: cartTotalPaise(cart),

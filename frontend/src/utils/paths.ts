@@ -17,4 +17,11 @@ export const paths = {
   myOrders: () => '/orders',
   kitchen: (tab?: 'orders') => `/kitchen${tab ? `?tab=${tab}` : ''}`,
   order: (orderId: string, justPlaced = false) => `/orders/${encodeURIComponent(orderId)}${justPlaced ? '?placed=1' : ''}`,
+  admin: () => '/admin',
+  adminRestaurants: () => '/admin/restaurants',
+  adminNewRestaurant: () => '/admin/restaurants/new',
+  adminRestaurant: (id: string) => `/admin/restaurants/${encodeURIComponent(id)}`,
+  adminOrders: () => '/admin/orders',
+  adminOwners: () => '/admin/owners',
+  adminNewOwner: () => '/admin/owners/new',
 };

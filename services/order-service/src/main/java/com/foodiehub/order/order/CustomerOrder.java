@@ -16,6 +16,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import org.hibernate.annotations.BatchSize;
 
 /** A submitted pickup order. Created only through {@link #create}; persisted together with its lines. */
 @Entity
@@ -73,6 +74,7 @@ public class CustomerOrder {
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("lineNo ASC")
+    @BatchSize(size = 100) // paged administrator lists load the lines of a whole page at once (DEC-017)
     private List<OrderItem> items = new ArrayList<>();
 
     protected CustomerOrder() {

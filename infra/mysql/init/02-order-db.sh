@@ -1,6 +1,7 @@
 #!/bin/bash
 # Docker only (optional setup). Runs once, when the MySQL data volume is first initialised.
-# order_db with a Flyway migrator and a SELECT/INSERT-only runtime user. No grants on any other database.
+# order_db with a Flyway migrator and a runtime user: SELECT/INSERT, plus UPDATE on customer_order for owner status
+# changes (DEC-016). Never DELETE. No grants on any other database.
 set -euo pipefail
 
 mysql --protocol=socket -uroot -p"${MYSQL_ROOT_PASSWORD}" <<SQL
@@ -11,4 +12,5 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES ON 
 
 CREATE USER IF NOT EXISTS 'order_app'@'%' IDENTIFIED BY '${ORDER_DB_APP_PASSWORD}';
 GRANT SELECT, INSERT ON order_db.* TO 'order_app'@'%';
+GRANT UPDATE ON order_db.customer_order TO 'order_app'@'%';
 SQL

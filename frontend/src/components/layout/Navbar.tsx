@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
-import { BookOpen, ChefHat, ClipboardList, House, LogIn, LogOut, Menu as MenuIcon, ShoppingBag, UtensilsCrossed } from 'lucide-react';
+import { BookOpen, ChefHat, ClipboardList, House, LogIn, LogOut, Menu as MenuIcon, ShieldCheck, ShoppingBag, UtensilsCrossed } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { hasRole, useAuth } from '../../context/AuthContext.tsx';
 import type { Role } from '../../services/auth.ts';
@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
   { to: paths.story(), label: 'nav.story', icon: BookOpen },
   { to: paths.myOrders(), label: 'nav.myOrders', icon: ClipboardList, role: 'CUSTOMER' },
   { to: paths.kitchen(), label: 'nav.kitchen', icon: ChefHat, role: 'RESTAURANT_OWNER' },
+  { to: paths.admin(), label: 'nav.admin', icon: ShieldCheck, role: 'ADMIN' },
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {

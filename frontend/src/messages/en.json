@@ -22,7 +22,8 @@
     "signInUnavailable": "Sign-in unavailable",
     "homeAria": "ZAYORA home",
     "skipToContent": "Skip to content",
-    "kitchen": "Kitchen"
+    "kitchen": "Kitchen",
+    "admin": "Admin"
   },
   "home": {
     "metaTitle": "Biryani & Indian food for pickup",
@@ -266,7 +267,9 @@
     "customerOnlyTitle": "Ordering needs a customer account",
     "customerOnlyText": "This account isn't a customer account, so it can't place orders. Log in as a customer to check out.",
     "ownerOnlyTitle": "For restaurant owners",
-    "ownerOnlyText": "The kitchen dashboard is only for restaurant owner accounts."
+    "ownerOnlyText": "The kitchen dashboard is only for restaurant owner accounts.",
+    "adminOnlyTitle": "For platform administrators",
+    "adminOnlyText": "The admin dashboard is only for administrator accounts."
   },
   "orders": {
     "metaTitle": "My orders",
@@ -400,7 +403,15 @@
     "MENU_ITEM_NOT_FOUND": "This dish isn't on your menu.",
     "NOTHING_TO_UPDATE": "Nothing was changed.",
     "INVALID_TRANSITION": "This order can't move to that step from where it is now.",
-    "ORDER_CHANGED": "This order was updated in the meantime. The list now shows its current status."
+    "ORDER_CHANGED": "This order was updated in the meantime. The list now shows its current status.",
+    "INVALID_OWNER": "That account can't own a restaurant. Choose an enabled account with the restaurant owner role.",
+    "RESTAURANT_HAS_NO_MENU": "This restaurant needs at least one available dish before customers can see it.",
+    "RESTAURANT_CHANGED": "Someone else changed this restaurant in the meantime. Reload it and try again.",
+    "USER_DIRECTORY_UNAVAILABLE": "Accounts can't be loaded from the sign-in service right now. Please try again shortly.",
+    "INVALID_QUERY": "That filter isn't valid. Reset the filters and try again.",
+    "OWNER_USERNAME_TAKEN": "This username is already taken. Choose another one.",
+    "OWNER_EMAIL_TAKEN": "An account with this e-mail address already exists.",
+    "OWNER_PROVISIONING_UNAVAILABLE": "The account couldn't be created right now (or owner creation isn't set up). No account was created; please try again."
   },
   "kitchen": {
     "metaTitle": "Kitchen dashboard",
@@ -472,6 +483,187 @@
       "noReason": "No reason",
       "keep": "Keep order",
       "confirm": "Reject order"
+    }
+  },
+  "admin": {
+    "eyebrow": "Platform admin",
+    "nav": {
+      "label": "Admin sections",
+      "dashboard": "Dashboard",
+      "restaurants": "Restaurants",
+      "orders": "Orders",
+      "owners": "Owners"
+    },
+    "cards": {
+      "totalRestaurants": "Restaurants",
+      "activeRestaurants": "Active",
+      "inactiveRestaurants": "Inactive",
+      "totalOwners": "Restaurant owners",
+      "totalCustomers": "Customers",
+      "totalOrders": "Orders",
+      "ordersToday": "Orders today"
+    },
+    "dashboard": {
+      "metaTitle": "Admin dashboard",
+      "title": "Dashboard",
+      "recentOrders": "Recent orders",
+      "allOrders": "All orders",
+      "byStatus": "Orders by status",
+      "activity": "Restaurant activity",
+      "noActivity": "No orders have been placed yet.",
+      "value": "Order value {total} in total, {today} today (rejected orders excluded)",
+      "timeZone": "Today = {zone}",
+      "directoryUnavailable": "Owner and customer counts are unavailable: the sign-in service can't be asked right now."
+    },
+    "restaurants": {
+      "metaTitle": "Restaurants · Admin",
+      "title": "Restaurants",
+      "new": "New restaurant",
+      "search": "Search restaurants by name…",
+      "filter": "Filter restaurants",
+      "filters": {
+        "all": "All",
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "emptyTitle": "No restaurants found",
+      "emptyText": "Try another search or filter, or create a restaurant."
+    },
+    "restaurant": {
+      "title": "Restaurant",
+      "newTitle": "New restaurant",
+      "newHint": "New restaurants start inactive. Assign an owner and make sure the menu has an available dish, then activate it.",
+      "create": "Create restaurant",
+      "created": "{name} created. Assign an owner next.",
+      "saved": "{name} saved.",
+      "details": "Details",
+      "back": "All restaurants",
+      "notFoundTitle": "Restaurant not found",
+      "notFoundText": "This restaurant doesn't exist.",
+      "active": "Active",
+      "inactive": "Inactive",
+      "visibility": "Visibility",
+      "activeText": "Customers can see this restaurant and order from it.",
+      "inactiveText": "Customers can't see this restaurant or order from it. Its menu, orders and owner are kept.",
+      "noMenuHint": "It has no available dish yet, so it cannot be activated.",
+      "activate": "Activate restaurant",
+      "deactivate": "Deactivate",
+      "activated": "{name} is now active.",
+      "deactivated": "{name} is now inactive.",
+      "confirmTitle": "Deactivate {name}?",
+      "confirmText": "Customers will stop seeing it and can't place new orders. Nothing is deleted: its menu, past orders and owner stay, and you can activate it again."
+    },
+    "owner": {
+      "title": "Owner",
+      "none": "No owner",
+      "noneText": "No owner is assigned yet.",
+      "current": "Managed by {owner}.",
+      "needsReassignment": "{owner} was linked by username before account-based ownership. Assign the owner again so they can manage it.",
+      "needsReassignmentShort": "Re-assign",
+      "choose": "Restaurant owner account",
+      "placeholder": "Choose an owner…",
+      "assign": "Assign owner",
+      "reassign": "Change owner",
+      "assigned": "{owner} now manages {name}.",
+      "noAccounts": "No enabled accounts have the restaurant owner role yet.",
+      "roleHint": "Only accounts with the restaurant owner role in Keycloak are listed. Roles are granted in the Keycloak admin console, never here."
+    },
+    "orders": {
+      "metaTitle": "Orders · Admin",
+      "title": "Orders",
+      "allRestaurants": "All restaurants",
+      "allStatuses": "All statuses",
+      "count_one": "{count} order",
+      "count_other": "{count} orders",
+      "emptyTitle": "No orders found",
+      "emptyText": "No orders match these filters yet."
+    },
+    "table": {
+      "restaurant": "Restaurant",
+      "status": "Status",
+      "owner": "Owner",
+      "dishes": "Dishes",
+      "dishCount": "{available} of {total} available",
+      "orders": "Orders",
+      "today": "Today",
+      "lastOrder": "Last order",
+      "order": "Order",
+      "items": "Items",
+      "total": "Total",
+      "placed": "Placed"
+    },
+    "form": {
+      "name": "Name",
+      "description": "Description",
+      "address": "Address",
+      "city": "City",
+      "phone": "Phone",
+      "errors": {
+        "nameRequired": "Enter a name.",
+        "tooLong": "Use at most {max} characters.",
+        "phone": "Use 6–20 digits, spaces or + - ( )."
+      }
+    },
+    "pagination": {
+      "label": "Pages",
+      "previous": "Previous",
+      "next": "Next",
+      "status": "Page {page} of {total}"
+    },
+    "owners": {
+      "metaTitle": "Owners · Admin",
+      "title": "Restaurant owners",
+      "management": "Owner management",
+      "manage": "Manage owners",
+      "create": "Create owner",
+      "back": "All owners",
+      "restaurants": "Restaurants",
+      "notAssigned": "Not assigned",
+      "emptyTitle": "No owner accounts yet",
+      "emptyText": "Create an owner account, then assign it to a restaurant.",
+      "total_one": "{count} owner account in total",
+      "total_other": "{count} owner accounts in total",
+      "status": {
+        "active": "Active",
+        "disabled": "Disabled",
+        "passwordPending": "Must change password"
+      }
+    },
+    "ownerForm": {
+      "title": "Create owner",
+      "intro": "Creates a restaurant owner account in the sign-in service. The owner logs in with the temporary password and must choose a new one straight away.",
+      "fullName": "Full name",
+      "email": "Email",
+      "username": "Username",
+      "temporaryPassword": "Temporary password",
+      "usernameHint": "3–50 lower-case letters, digits, dots, hyphens or underscores. Used to log in.",
+      "passwordHint": "10–64 characters, not containing the username. Share it with the owner securely; they must change it at first login.",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "restaurant": "Assign to restaurant (optional)",
+      "assignLater": "Assign later",
+      "replaces": "replaces {owner}",
+      "notConfigured": "Owner creation isn't set up on the server (no provisioning client secret). You can still assign existing owner accounts.",
+      "created": "Owner account {username} created.",
+      "createdTitle": "{username} created",
+      "createdText": "{name} ({email}) can now log in as a restaurant owner.",
+      "sharePassword": "Give the temporary password to the owner through a secure channel. It is not shown again, and they must replace it at first login.",
+      "assignedTo": "Assigned to {name}: the owner sees it in the Kitchen after logging in.",
+      "notAssignedYet": "No restaurant assigned yet. Assign one from the restaurant page whenever you are ready.",
+      "assignFailed": "The account was created, but assigning {name} failed.",
+      "retryAssign": "Try the assignment again",
+      "openRestaurant": "Open restaurant",
+      "createAnother": "Create another owner",
+      "errors": {
+        "fullNameRequired": "Enter the full name.",
+        "emailRequired": "Enter an e-mail address.",
+        "email": "Enter a valid e-mail address.",
+        "usernameRequired": "Choose a username.",
+        "username": "Use 3–50 lower-case letters, digits, dots, hyphens or underscores, starting with a letter or digit.",
+        "passwordRequired": "Enter a temporary password.",
+        "passwordLength": "Use 10–64 characters.",
+        "passwordUsername": "The password mustn't contain the username."
+      }
     }
   }
 }

@@ -37,13 +37,14 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/** Owner endpoints (DEC-015): role required, own restaurants only, validated changes, Problem Details errors. */
+/** Owner endpoints (DEC-015): role required, own restaurants only (by token subject, DEC-017), validated changes, Problem Details errors. */
 @WebMvcTest({OwnerController.class, RestaurantController.class})
 @Import(SecurityConfig.class)
 class OwnerControllerTest {
 
     private static final String RID = "00000000-0000-0000-0000-000000000001";
     private static final String ITEM = "00000000-0000-0000-0001-000000000034";
+    private static final String OWNER_SUB = "6b1c2a5e-0000-4000-8000-000000000001";
 
     @Autowired
     MockMvc mvc;
@@ -55,7 +56,7 @@ class OwnerControllerTest {
     RestaurantCatalog catalog;
 
     private static MockHttpServletRequestBuilder asOwner(MockHttpServletRequestBuilder request) {
-        return request.with(jwt().jwt(j -> j.claim("preferred_username", "owner"))
+        return request.with(jwt().jwt(j -> j.subject(OWNER_SUB).claim("preferred_username", "owner"))
                 .authorities(new SimpleGrantedAuthority("ROLE_RESTAURANT_OWNER")));
     }
 
@@ -88,8 +89,8 @@ class OwnerControllerTest {
     }
 
     @Test
-    void listsTheOwnersRestaurantsByTheirUsername() throws Exception {
-        given(owners.ownedRestaurants("owner")).willReturn(List.of(new Restaurant(RID, "ZAYORA", true)));
+    void listsTheOwnersRestaurantsByTheirTokenSubject() throws Exception {
+        given(owners.ownedRestaurants(OWNER_SUB)).willReturn(List.of(new Restaurant(RID, "ZAYORA", true)));
         mvc.perform(asOwner(get("/api/v1/owner/restaurants")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(RID))
@@ -99,7 +100,7 @@ class OwnerControllerTest {
 
     @Test
     void updatesOnlyTheFieldsSentAndReturnsTheDish() throws Exception {
-        given(owners.updateMenuItem(eq(RID), eq(ITEM), eq("owner"), any())).willAnswer(inv -> {
+        given(owners.updateMenuItem(eq(RID), eq(ITEM), eq(OWNER_SUB), any())).willAnswer(inv -> {
             MenuItem item = phirni();
             OwnerCatalog.MenuItemChanges c = inv.getArgument(3);
             item.applyOwnerChanges(c.available(), c.price(), c.description(), c.bestseller(), c.chefSpecial());
@@ -114,7 +115,7 @@ class OwnerControllerTest {
                 .andExpect(jsonPath("$.description").value("Chilled pudding."));
 
         ArgumentCaptor<OwnerCatalog.MenuItemChanges> changes = ArgumentCaptor.forClass(OwnerCatalog.MenuItemChanges.class);
-        verify(owners).updateMenuItem(eq(RID), eq(ITEM), eq("owner"), changes.capture());
+        verify(owners).updateMenuItem(eq(RID), eq(ITEM), eq(OWNER_SUB), changes.capture());
         assertThat(changes.getValue().price()).isEqualByComparingTo("95.50");
         assertThat(changes.getValue().price().scale()).isEqualTo(2);
         assertThat(changes.getValue().description()).isNull();
@@ -147,6 +148,25 @@ class OwnerControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
         verify(owners, never()).updateMenuItem(anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void theUsernameNeverGrantsOwnership() throws Exception {
+        // DEC-017: a token whose username is "owner" but whose subject is someone else sees nothing of the owner's.
+        given(owners.ownedRestaurants(OWNER_SUB)).willReturn(List.of(new Restaurant(RID, "ZAYORA", true)));
+        mvc.perform(get("/api/v1/owner/restaurants").with(jwt().jwt(j -> j.subject("someone-else").claim("preferred_username", "owner"))
+                        .authorities(new SimpleGrantedAuthority("ROLE_RESTAURANT_OWNER"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+        verify(owners).ownedRestaurants("someone-else");
+        verify(owners, never()).ownedRestaurants("owner");
+    }
+
+    @Test
+    void anAdminTokenIsNotAnOwnerToken() throws Exception {
+        mvc.perform(get("/api/v1/owner/restaurants").with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().isForbidden());
+        verify(owners, never()).ownedRestaurants(anyString());
     }
 
     @Test

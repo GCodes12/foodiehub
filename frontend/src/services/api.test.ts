@@ -197,3 +197,89 @@ describe('describeError', () => {
     assert.equal(describeError(new ApiError(404, null, null)), t('errors.status.404'));
   });
 });
+
+describe('api client — platform administration (DEC-017)', () => {
+  function recorder(bodies: unknown[]) {
+    const calls: Call[] = [];
+    let i = 0;
+    const impl = async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify(bodies[i++] ?? {}), { status: 200 });
+    };
+    return { calls, impl };
+  }
+
+  it('reads the dashboard, restaurants, owners and platform orders with the token and query filters', async () => {
+    const page = { items: [], page: 0, size: 20, totalItems: 0, totalPages: 0 };
+    const rec = recorder([{}, page, {}, page, page, {}]);
+    const api = createApi(async () => 'admin-token', { fetchImpl: rec.impl });
+    await api.getAdminDashboard();
+    await api.listAdminRestaurants({ page: 2, size: 20, active: false, q: 'spice route' });
+    await api.getAdminRestaurant('r 1');
+    await api.listOwners({ size: 100 });
+    await api.listAdminOrders({ status: 'PREPARING', restaurantId: undefined });
+    await api.getAdminOrderSummary();
+    assert.deepEqual(rec.calls.map((c) => c.url), [
+      '/api/v1/admin/dashboard',
+      '/api/v1/admin/restaurants?page=2&size=20&active=false&q=spice+route',
+      '/api/v1/admin/restaurants/r%201',
+      '/api/v1/admin/owners?size=100',
+      '/api/v1/admin/orders?status=PREPARING',
+      '/api/v1/admin/orders/summary',
+    ]);
+    assert.ok(rec.calls.every((c) => new Headers(c.init.headers).get('Authorization') === 'Bearer admin-token'));
+  });
+
+  it('sends exactly the intended bodies for create, edit, status and owner changes', async () => {
+    const rec = recorder([{}, {}, {}, {}]);
+    const api = createApi(async () => 'admin-token', { fetchImpl: rec.impl });
+    await api.createRestaurant({ name: 'Spice Route', city: 'Kochi' });
+    await api.updateRestaurant('r1', 4, { city: '' });
+    await api.setRestaurantActive('r1', false, 5);
+    await api.assignRestaurantOwner('r1', 'sub-123');
+    assert.deepEqual(rec.calls.map((c) => [c.init.method, c.url, JSON.parse(c.init.body as string)]), [
+      ['POST', '/api/v1/admin/restaurants', { name: 'Spice Route', city: 'Kochi' }],
+      ['PATCH', '/api/v1/admin/restaurants/r1', { expectedVersion: 4, city: '' }],
+      ['PUT', '/api/v1/admin/restaurants/r1/status', { active: false, expectedVersion: 5 }],
+      ['PUT', '/api/v1/admin/restaurants/r1/owner', { ownerSub: 'sub-123' }],
+    ]);
+  });
+
+  it('never calls an admin endpoint without a session', async () => {
+    const rec = recorder([]);
+    const api = createApi(async () => null, { fetchImpl: rec.impl });
+    await assert.rejects(api.getAdminDashboard(), (e: unknown) => e instanceof ApiError && e.status === 401);
+    assert.equal(rec.calls.length, 0);
+  });
+
+  it('explains the admin error codes with the text from the messages file', () => {
+    assert.match(describeError(new ApiError(422, 'INVALID_OWNER', 'x')), /restaurant owner role/);
+    assert.match(describeError(new ApiError(409, 'RESTAURANT_HAS_NO_MENU', 'x')), /at least one available dish/);
+    assert.match(describeError(new ApiError(409, 'RESTAURANT_CHANGED', 'x')), /Reload it/);
+    assert.match(describeError(new ApiError(503, 'USER_DIRECTORY_UNAVAILABLE', 'x')), /sign-in service/);
+    assert.match(describeError(new ApiError(403, 'FORBIDDEN', 'x')), /isn't allowed/);
+  });
+});
+
+describe('api client — owner accounts (DEC-018)', () => {
+  it('creates an owner with exactly the form fields and the admin token', async () => {
+    const calls: Call[] = [];
+    const api = createApi(async () => 'admin-token', { fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ sub: 's', username: 'asha.rao', displayName: 'Asha Rao', email: 'a@x.test', enabled: true,
+        passwordChangePending: true, restaurants: [] }), { status: 201 });
+    } });
+    const owner = await api.createOwner({ fullName: 'Asha Rao', email: 'a@x.test', username: 'asha.rao', temporaryPassword: 'Kitchen-Start-42' });
+    assert.equal(owner.passwordChangePending, true);
+    assert.equal(calls[0].url, '/api/v1/admin/owners');
+    assert.equal(calls[0].init.method, 'POST');
+    assert.equal(new Headers(calls[0].init.headers).get('Authorization'), 'Bearer admin-token');
+    assert.deepEqual(Object.keys(JSON.parse(calls[0].init.body as string)).sort(), ['email', 'fullName', 'temporaryPassword', 'username']);
+  });
+
+  it('explains duplicate and provisioning errors', () => {
+    assert.match(describeError(new ApiError(409, 'OWNER_USERNAME_TAKEN', 'x')), /username is already taken/);
+    assert.match(describeError(new ApiError(409, 'OWNER_EMAIL_TAKEN', 'x')), /e-mail address already exists/);
+    assert.match(describeError(new ApiError(503, 'OWNER_PROVISIONING_UNAVAILABLE', 'x')), /No account was created/);
+  });
+});

@@ -1,6 +1,7 @@
 package com.foodiehub.restaurant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -121,26 +122,57 @@ class RestaurantApiIntegrationTest {
         }
     }
 
-    // --- Owner operations against real MySQL (DEC-015) -------------------------------------------------------
+    // --- Owner operations against real MySQL (DEC-015; ownership by token subject, DEC-017) -----------------------
 
     private static final String LASSI = "00000000-0000-0000-0001-000000000036"; // Mango Lassi in the seed
+    private static final String OWNER_SUB = "6b1c2a5e-0000-4000-8000-0000000000aa";
+
+    @Autowired
+    com.foodiehub.restaurant.domain.AdminCatalog admin;
+
+    private void assignDemoTo(String sub) {
+        assertThat(admin.assignOwner(DEMO, sub, "owner")).isPresent();
+    }
 
     @Test
-    void theSeededOwnerManagesZayoraAndNobodyElseDoes() {
-        assertThat(owners.ownedRestaurants("owner")).extracting(r -> r.getId()).containsExactly(DEMO);
-        assertThat(owners.ownedRestaurants("alice")).isEmpty();
-        assertThat(owners.menuOfOwnedRestaurant(DEMO, "owner")).get().asList().hasSize(42);
-        assertThat(owners.menuOfOwnedRestaurant(DEMO, "alice")).isEmpty();
-        assertThat(owners.menuOfOwnedRestaurant(INACTIVE, "owner")).isEmpty();
+    void theLegacyUsernameLinkSurvivesTheMigrationButGrantsNothing() {
+        // The state V4 leaves behind: the seeded link keeps its username but has no subject (D2: fail closed).
+        jdbc.update("UPDATE restaurant_owner SET owner_sub = NULL, owner_username = 'owner' WHERE restaurant_id = ?", DEMO);
+
+        assertThat(owners.ownedRestaurants("owner")).isEmpty(); // a username is never an owner identity
+        assertThat(owners.menuOfOwnedRestaurant(DEMO, "owner")).isEmpty();
+        assertThat(admin.find(DEMO)).get().satisfies(v -> {
+            assertThat(v.owner().getOwnerUsername()).isEqualTo("owner");
+            assertThat(v.owner().getOwnerSub()).isNull();
+        });
+        assertThat(jdbc.queryForList("SELECT COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() "
+                + "AND TABLE_NAME = 'restaurant_owner' AND CONSTRAINT_NAME = 'PRIMARY'", String.class)).containsExactly("restaurant_id");
+    }
+
+    @Test
+    void ownershipFollowsTheAssignedSubjectAndCanBeReassigned() {
+        assignDemoTo("sub-first");
+        assertThat(owners.ownedRestaurants("sub-first")).extracting(r -> r.getId()).containsExactly(DEMO);
+        assertThat(owners.menuOfOwnedRestaurant(DEMO, "sub-first")).get().asList().hasSize(42);
+        assertThat(owners.ownedRestaurants("sub-second")).isEmpty();
+
+        assignDemoTo("sub-second");
+        assertThat(owners.ownedRestaurants("sub-second")).extracting(r -> r.getId()).containsExactly(DEMO);
+        assertThat(owners.ownedRestaurants("sub-first")).isEmpty();
+        assertThat(owners.updateMenuItem(DEMO, LASSI, "sub-first",
+                new com.foodiehub.restaurant.domain.OwnerCatalog.MenuItemChanges(false, null, null, null, null))).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM restaurant_owner WHERE restaurant_id = ?", Integer.class, DEMO))
+                .isEqualTo(1); // one owner per restaurant
     }
 
     @Test
     void anOwnerChangeIsStoredAndShownOnThePublicMenu() throws Exception {
+        assignDemoTo(OWNER_SUB);
         String before = jdbc.queryForObject("SELECT CONCAT(price, '|', available) FROM menu_item WHERE id = ?", String.class, LASSI);
         try {
             var changes = new com.foodiehub.restaurant.domain.OwnerCatalog.MenuItemChanges(
                     false, new java.math.BigDecimal("109.00"), null, null, null);
-            assertThat(owners.updateMenuItem(DEMO, LASSI, "owner", changes)).isPresent();
+            assertThat(owners.updateMenuItem(DEMO, LASSI, OWNER_SUB, changes)).isPresent();
 
             assertThat(jdbc.queryForObject("SELECT CONCAT(price, '|', available) FROM menu_item WHERE id = ?", String.class, LASSI))
                     .isEqualTo("109.00|0");
@@ -155,12 +187,76 @@ class RestaurantApiIntegrationTest {
 
     @Test
     void anOwnerCannotChangeAnotherRestaurantsDish() {
+        assignDemoTo(OWNER_SUB);
         var changes = new com.foodiehub.restaurant.domain.OwnerCatalog.MenuItemChanges(false, null, null, null, null);
         // the inactive test restaurant's dish, via the owner's own restaurant id and via the other restaurant's id
-        assertThat(owners.updateMenuItem(DEMO, "00000000-0000-0000-0001-0000000000ff", "owner", changes)).isEmpty();
-        assertThat(owners.updateMenuItem(INACTIVE, "00000000-0000-0000-0001-0000000000ff", "owner", changes)).isEmpty();
-        assertThat(owners.updateMenuItem(DEMO, LASSI, "alice", changes)).isEmpty();
+        assertThat(owners.updateMenuItem(DEMO, "00000000-0000-0000-0001-0000000000ff", OWNER_SUB, changes)).isEmpty();
+        assertThat(owners.updateMenuItem(INACTIVE, "00000000-0000-0000-0001-0000000000ff", OWNER_SUB, changes)).isEmpty();
+        assertThat(owners.updateMenuItem(DEMO, LASSI, "sub-somebody-else", changes)).isEmpty();
         assertThat(jdbc.queryForObject("SELECT available FROM menu_item WHERE id = ?", Boolean.class, LASSI)).isTrue();
     }
-}
 
+    // --- Administrator restaurant management against real MySQL (DEC-017) -------------------------------------------
+
+    @Test
+    void anAdminCreatesEditsActivatesAndDeactivatesARestaurant() throws Exception {
+        var created = admin.create(new com.foodiehub.restaurant.domain.Restaurant.Details(
+                "Integration Bistro", "Test kitchen", "2 Park Street", "Kolkata", "+91 33 0000 0000"));
+        String id = created.restaurant().getId();
+        try {
+            assertThat(created.restaurant().isActive()).isFalse(); // always starts inactive
+            assertThat(get("/api/v1/restaurants/" + id).statusCode()).isEqualTo(404);
+            long version = created.restaurant().getVersion();
+
+            // A stale screen cannot overwrite a newer change.
+            assertThatThrownBy(() -> admin.update(id, version + 1,
+                    new com.foodiehub.restaurant.domain.Restaurant.Details("Stale", null, null, null, null)))
+                    .isInstanceOf(com.foodiehub.restaurant.domain.RestaurantChangedException.class);
+
+            var edited = admin.update(id, version,
+                    new com.foodiehub.restaurant.domain.Restaurant.Details("Integration Bistro II", null, null, "", null)).orElseThrow();
+            assertThat(edited.restaurant().getName()).isEqualTo("Integration Bistro II");
+            assertThat(edited.restaurant().getCity()).isNull(); // blank clears an optional field
+            assertThat(edited.restaurant().getAddress()).isEqualTo("2 Park Street"); // untouched
+            long v2 = edited.restaurant().getVersion();
+            assertThat(v2).isGreaterThan(version);
+
+            // No available dish yet: customers would see an empty menu.
+            assertThatThrownBy(() -> admin.setActive(id, true, v2))
+                    .isInstanceOf(com.foodiehub.restaurant.domain.RestaurantHasNoMenuException.class);
+            jdbc.update("INSERT INTO menu_item (id, restaurant_id, name, price, available) VALUES (UUID(), ?, 'Test Thali', 150.00, TRUE)", id);
+
+            var activated = admin.setActive(id, true, v2).orElseThrow();
+            assertThat(activated.restaurant().isActive()).isTrue();
+            assertThat(activated.availableDishes()).isEqualTo(1);
+            assertThat(get("/api/v1/restaurants/" + id).statusCode()).isEqualTo(200);
+
+            var deactivated = admin.setActive(id, false, activated.restaurant().getVersion()).orElseThrow();
+            assertThat(deactivated.restaurant().isActive()).isFalse();
+            assertThat(get("/api/v1/restaurants/" + id + "/menu").statusCode()).isEqualTo(404); // soft: data is kept
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM menu_item WHERE restaurant_id = ?", Integer.class, id)).isEqualTo(1);
+        } finally {
+            jdbc.update("UPDATE restaurant SET active = FALSE WHERE id = ?", id);
+        }
+    }
+
+    @Test
+    void anAdminSearchesRestaurantsWithOwnerAndDishCounts() {
+        assignDemoTo(OWNER_SUB);
+        var page = admin.search(null, "zAy", 0, 20);
+        assertThat(page.getContent()).hasSize(1);
+        var zayora = page.getContent().getFirst();
+        assertThat(zayora.restaurant().getId()).isEqualTo(DEMO);
+        assertThat(zayora.dishes()).isEqualTo(42);
+        assertThat(zayora.availableDishes()).isEqualTo(41); // Phirni is sold out in the seed
+        assertThat(zayora.owner().getOwnerSub()).isEqualTo(OWNER_SUB);
+
+        assertThat(admin.search(false, null, 0, 50).getContent()).extracting(v -> v.restaurant().getId()).contains(INACTIVE)
+                .doesNotContain(DEMO);
+        assertThat(admin.search(null, "100%_", 0, 20).getContent()).isEmpty(); // LIKE wildcards are literal
+        var counts = admin.counts();
+        assertThat(counts.total()).isGreaterThanOrEqualTo(2);
+        assertThat(counts.active() + counts.inactive()).isEqualTo(counts.total());
+        assertThat(admin.restaurantsByOwner(java.util.List.of(OWNER_SUB))).containsKey(OWNER_SUB);
+    }
+}

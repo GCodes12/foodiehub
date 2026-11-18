@@ -14,6 +14,9 @@ export default defineConfig({
       // Owner endpoints (DEC-015)
       '/api/v1/owner/restaurants': process.env.RESTAURANT_SERVICE_URL ?? 'http://localhost:8081',
       '/api/v1/owner/orders': process.env.ORDER_SERVICE_URL ?? 'http://localhost:8082',
+      // Administrator endpoints (DEC-017). The first matching prefix wins, so the order-service one comes first.
+      '/api/v1/admin/orders': process.env.ORDER_SERVICE_URL ?? 'http://localhost:8082',
+      '/api/v1/admin': process.env.RESTAURANT_SERVICE_URL ?? 'http://localhost:8081',
     },
   },
 });

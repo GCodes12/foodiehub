@@ -1,6 +1,8 @@
 import type {
-  CreateOrderRequest, Diet, FieldError, Menu, MenuItem, MenuItemChanges, Order, OwnedRestaurant, RestaurantSummary,
-  StatusChangeRequest,
+  AdminDashboard, AdminOrderSummary, AdminRestaurant, AdminRestaurantSummary, CreateOrderRequest, Diet, FieldError, Menu,
+  MenuItem, MenuItemChanges, Order, OrderStatus, OwnedRestaurant, OwnerAccount, PageResponse, RestaurantDetailsInput,
+  CreateOwnerInput,
+  RestaurantSummary, StatusChangeRequest,
 } from '../types/api.ts';
 import { hasMessage, t } from '../utils/i18n.ts';
 
@@ -72,6 +74,12 @@ export function createApi(getToken: TokenProvider, options: ApiOptions = {}) {
   const orders = `${orderBase}/api/v1/orders`;
   const ownerRestaurants = `${restaurantBase}/api/v1/owner/restaurants`;
   const ownerOrders = `${orderBase}/api/v1/owner/orders`;
+  const adminRestaurants = `${restaurantBase}/api/v1/admin/restaurants`;
+  const adminOrders = `${orderBase}/api/v1/admin/orders`;
+
+  function json(method: string, body: unknown): RequestInit {
+    return { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+  }
 
   return {
     async listRestaurants(): Promise<RestaurantSummary[]> {
@@ -139,7 +147,74 @@ export function createApi(getToken: TokenProvider, options: ApiOptions = {}) {
         body: JSON.stringify(change),
       }, true)).body;
     },
+
+    // --- Platform administration (DEC-017): every call needs the ADMIN role; the services enforce it ---
+
+    async getAdminDashboard(): Promise<AdminDashboard> {
+      return (await call<AdminDashboard>(`${restaurantBase}/api/v1/admin/dashboard`, {}, true)).body;
+    },
+
+    async listAdminRestaurants(params: { page?: number; size?: number; active?: boolean; q?: string } = {}): Promise<PageResponse<AdminRestaurantSummary>> {
+      return (await call<PageResponse<AdminRestaurantSummary>>(`${adminRestaurants}${query(params)}`, {}, true)).body;
+    },
+
+    async getAdminRestaurant(id: string): Promise<AdminRestaurant> {
+      return (await call<AdminRestaurant>(`${adminRestaurants}/${encodeURIComponent(id)}`, {}, true)).body;
+    },
+
+    async createRestaurant(details: RestaurantDetailsInput): Promise<AdminRestaurant> {
+      return (await call<AdminRestaurant>(adminRestaurants, json('POST', details), true)).body;
+    },
+
+    /** Only the fields present change. `expectedVersion` is the version the screen showed (409 if it changed since). */
+    async updateRestaurant(id: string, expectedVersion: number, changes: RestaurantDetailsInput): Promise<AdminRestaurant> {
+      return (await call<AdminRestaurant>(`${adminRestaurants}/${encodeURIComponent(id)}`,
+        json('PATCH', { expectedVersion, ...changes }), true)).body;
+    },
+
+    async setRestaurantActive(id: string, active: boolean, expectedVersion: number): Promise<AdminRestaurant> {
+      return (await call<AdminRestaurant>(`${adminRestaurants}/${encodeURIComponent(id)}/status`,
+        json('PUT', { active, expectedVersion }), true)).body;
+    },
+
+    /** The server checks with Keycloak that this account is an enabled restaurant owner (422 INVALID_OWNER otherwise). */
+    async assignRestaurantOwner(id: string, ownerSub: string): Promise<AdminRestaurant> {
+      return (await call<AdminRestaurant>(`${adminRestaurants}/${encodeURIComponent(id)}/owner`,
+        json('PUT', { ownerSub }), true)).body;
+    },
+
+    async listOwners(params: { page?: number; size?: number } = {}): Promise<PageResponse<OwnerAccount>> {
+      return (await call<PageResponse<OwnerAccount>>(`${restaurantBase}/api/v1/admin/owners${query(params)}`, {}, true)).body;
+    },
+
+    /**
+     * Creates a restaurant owner account in Keycloak (DEC-018). The response never contains the password. Assign a
+     * restaurant afterwards with assignRestaurantOwner.
+     */
+    async createOwner(owner: CreateOwnerInput): Promise<OwnerAccount> {
+      return (await call<OwnerAccount>(`${restaurantBase}/api/v1/admin/owners`, json('POST', owner), true)).body;
+    },
+
+    async listAdminOrders(params: { page?: number; size?: number; restaurantId?: string; status?: OrderStatus } = {}): Promise<PageResponse<Order>> {
+      return (await call<PageResponse<Order>>(`${adminOrders}${query(params)}`, {}, true)).body;
+    },
+
+    async getAdminOrderSummary(): Promise<AdminOrderSummary> {
+      return (await call<AdminOrderSummary>(`${adminOrders}/summary`, {}, true)).body;
+    },
   };
+}
+
+/** "?a=1&b=x" from the defined, non-empty values (or "" when there are none). */
+function query(params: Record<string, string | number | boolean | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') {
+      search.set(key, String(value));
+    }
+  }
+  const text = search.toString();
+  return text ? `?${text}` : '';
 }
 
 export type Api = ReturnType<typeof createApi>;

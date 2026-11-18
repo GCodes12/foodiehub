@@ -22,6 +22,24 @@ spring:
     # Schema only. Demo seed data is added by the dev profile (application-dev.yml).
     locations: classpath:db/migration
 
+foodiehub:
+  # DEC-017: read-only Keycloak user directory (owner list, owner-assignment checks, user counts) through the
+  # service account of the confidential client foodiehub-admin-api. Without a secret the directory is disabled:
+  # those admin features answer 503 and everything else keeps working.
+  user-directory:
+    server-url: ${KEYCLOAK_URL:http://localhost:8080}
+    realm: ${KEYCLOAK_REALM:foodiehub}
+    client-id: ${KEYCLOAK_ADMIN_API_CLIENT_ID:foodiehub-admin-api}
+    client-secret: ${KEYCLOAK_ADMIN_API_CLIENT_SECRET:}
+    connect-timeout: 2s
+    read-timeout: 3s
+  # DEC-018: administrators create owner accounts through the separate confidential client foodiehub-owner-provisioner,
+  # which may only create users inside the owners group. Without a secret, owner creation is disabled (503).
+  owner-provisioning:
+    client-id: ${KEYCLOAK_OWNER_PROVISIONER_CLIENT_ID:foodiehub-owner-provisioner}
+    client-secret: ${KEYCLOAK_OWNER_PROVISIONER_CLIENT_SECRET:}
+    owner-group: ${KEYCLOAK_OWNER_GROUP:restaurant-owners}
+
 server:
   port: ${RESTAURANT_SERVICE_PORT:8081}
   error:
