@@ -42,8 +42,8 @@ export interface ApiOptions {
 
 export function createApi(getToken: TokenProvider, options: ApiOptions = {}) {
   const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));
-  const restaurantBase = (options.restaurantBaseUrl ?? '').replace(/\/+$/, '');
-  const orderBase = (options.orderBaseUrl ?? '').replace(/\/+$/, '');
+  const restaurantBase = trimTrailingSlashes(options.restaurantBaseUrl ?? '');
+  const orderBase = trimTrailingSlashes(options.orderBaseUrl ?? '');
 
   async function call<T>(url: string, init: RequestInit, authenticated: boolean): Promise<{ body: T; response: Response }> {
     const headers = new Headers(init.headers);
@@ -218,6 +218,15 @@ function query(params: Record<string, string | number | boolean | undefined>): s
 }
 
 export type Api = ReturnType<typeof createApi>;
+
+/** "http://host:8081///" → "http://host:8081". A loop instead of a regex: linear time for any input. */
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') {
+    end--;
+  }
+  return value.slice(0, end);
+}
 
 const DIETS: readonly string[] = ['VEG', 'EGG', 'NON_VEG'];
 

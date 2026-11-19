@@ -181,6 +181,26 @@ class ApiGatewayTest {
         assertThat(served()).isEmpty();
     }
 
+    /**
+     * CSRF regression guard (Sonar java:S4502 reviewed as not applicable): cookies never authenticate. Even a valid
+     * token sent as a cookie, alongside the session cookies a browser keeps for localhost, is ignored without the
+     * Authorization header; the request is refused with 401 and nothing reaches a service.
+     */
+    @Test
+    void cookiesWithoutABearerHeaderNeverAuthenticate() throws Exception {
+        String validToken = token(claims().build());
+        String cookies = "access_token=" + validToken + "; KEYCLOAK_SESSION=abc; KEYCLOAK_IDENTITY=" + validToken + "; JSESSIONID=xyz";
+        for (String[] request : new String[][] {{"POST", "/api/v1/orders"}, {"PATCH", "/api/v1/owner/orders/o1/status"},
+                {"PATCH", "/api/v1/owner/restaurants/r1/menu-items/m1"}, {"GET", "/api/v1/orders"}}) {
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + request[1]))
+                    .method(request[0], HttpRequest.BodyPublishers.ofString("{}"))
+                    .header("Content-Type", "application/json").header("Cookie", cookies).build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).as(request[0] + " " + request[1]).isEqualTo(401);
+            assertThat(response.headers().firstValue("WWW-Authenticate")).get().asString().startsWith("Bearer");
+        }
+        assertThat(served()).isEmpty();
+    }
+
     // --- Helpers ------------------------------------------------------------------------------------------------------
 
     private List<String> served() {

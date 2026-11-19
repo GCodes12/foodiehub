@@ -53,7 +53,7 @@ export function CheckoutPage() {
       const { order } = await api.createOrder(request, key);
       forgetIdempotencyKey(sessionStore);
       clear();
-      navigate(paths.order(order.id, true), { replace: true });
+      void navigate(paths.order(order.id, true), { replace: true });
     } catch (e) {
       if (e instanceof ApiError && e.code === 'IDEMPOTENCY_KEY_REUSED') {
         forgetIdempotencyKey(sessionStore);

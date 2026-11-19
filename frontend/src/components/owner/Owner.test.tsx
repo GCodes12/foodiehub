@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { RejectDialog } from '../../pages/KitchenPage.tsx';
 import { RequireRole } from '../layout/RequireRole.tsx';
 import { Navbar } from '../layout/Navbar.tsx';
 import { ALICE, menuItem, OWNER, render, SIGNED_OUT, text } from '../../test/render.tsx';
@@ -108,3 +109,15 @@ describe('OwnerOrderList', () => {
   });
 });
 
+describe('reject dialog initial focus (Sonar S9379)', () => {
+  it('marks "Keep order" for initial focus, never "Reject order", and renders no autofocus attribute', () => {
+    const order: Order = { id: 'abcdef12-0000', status: 'PENDING_PAYMENT', restaurantId: 'r1', fulfilmentType: 'PICKUP', currency: 'INR',
+      subtotal: 10, total: 10, createdAt: new Date().toISOString(), items: [] };
+    const html = render(<RejectDialog order={order} onCancel={() => {}} onConfirm={() => {}} />);
+    assert.match(text(html), /Reject order ABCDEF12\?/);
+    assert.equal((html.match(/data-initial-focus/g) ?? []).length, 1);
+    assert.match(html, /<button[^>]*data-initial-focus="true"[^>]*>Keep order<\/button>/);
+    assert.doesNotMatch(html, /<button[^>]*data-initial-focus[^>]*>Reject order<\/button>/);
+    assert.doesNotMatch(html, /autofocus/i);
+  });
+});

@@ -52,6 +52,7 @@ test-results/
 playwright-report/
 blob-report/
 .scannerwork/
+.sonar/
 
 # --- Logs ---
 *.log

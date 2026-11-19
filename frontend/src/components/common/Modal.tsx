@@ -13,6 +13,18 @@ interface Props {
   variant?: 'dialog' | 'drawer';
 }
 
+/** Marks the element that receives focus when a dialog opens (for example the least destructive button). */
+export const INITIAL_FOCUS = { 'data-initial-focus': true } as const;
+
+/**
+ * Moves focus to the element marked with {@link INITIAL_FOCUS}, if there is one. Called right after showModal(): React's
+ * autoFocus runs earlier, while the dialog is still closed, so it cannot do this. Without a marked element the browser's
+ * default applies (the first focusable element: the close button).
+ */
+export function focusInitialElement(root: Pick<ParentNode, 'querySelector'>): void {
+  root.querySelector<HTMLElement>('[data-initial-focus]')?.focus();
+}
+
 /** Native <dialog>: focus is trapped, Esc closes it, and the page behind is inert. Clicking the backdrop closes it. */
 export function Modal({ open, onClose, labelledBy, children, className = '', variant = 'dialog' }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -24,6 +36,7 @@ export function Modal({ open, onClose, labelledBy, children, className = '', var
     }
     if (open && !dialog.open) {
       dialog.showModal();
+      focusInitialElement(dialog);
     } else if (!open && dialog.open) {
       dialog.close();
     }

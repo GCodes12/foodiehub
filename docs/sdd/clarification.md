@@ -1,6 +1,6 @@
 # FoodieHub — Clarification Log
 
-> **Status: PARTLY ANSWERED.** Owner decisions **DEC-001 – DEC-019** are recorded in §9.2. Everything
+> **Status: PARTLY ANSWERED.** Owner decisions **DEC-001 – DEC-020** are recorded in §9.2. Everything
 > not covered by those decisions remains open. Recommended defaults (§9.1) take effect only when the owner records an
 > answer in §9.2.
 >
@@ -11,7 +11,7 @@
 used exactly as in `raw-requirement.md`. Questions Q-01 – Q-16 are defined there and referenced here. New questions
 continue the same series from **Q-17**. The proposed slice is called **VS-1**, its checkpoints **CP-1 – CP-5**, its draft
 acceptance criteria **VS1-AC1 – VS1-AC9**, the conflicts found here **CC-1 – CC-6**, and the owner decisions
-**DEC-001 – DEC-019** (§9.2). These are distinct from the `raw-requirement.md` findings C-01 – C-17.
+**DEC-001 – DEC-020** (§9.2). These are distinct from the `raw-requirement.md` findings C-01 – C-17.
 
 ---
 
@@ -604,6 +604,44 @@ service name through Spring Cloud LoadBalancer (round robin). The Vite dev serve
 
 **Not decided by DEC-019:** resilience settings, production Consul (ACLs, TLS, persistence), the load balancer's cache
 (the default is fine for development), rate limiting at the gateway.
+
+#### DEC-020 — Local CI: native Jenkins and SonarQube in Docker (2026-11-19)
+Step (2) of the order set in DEC-019. The development machine is a MacBook Air M2 with 8 GB of RAM and a 3.8 GB Docker
+VM, so the CI setup is chosen for low memory first. The owner approved:
+
+1. **Jenkins runs natively** on the host (Homebrew `jenkins-lts`, Java 21), not in Docker. A containerised Jenkins
+   would need the Docker socket mounted and would take memory from the Docker VM that the Testcontainers tests need. It
+   listens on `127.0.0.1:8088` only, has one executor, and its controller heap is capped at 512 MB.
+2. **SonarQube Community Build runs in Docker** from its own compose file, `infra/sonarqube/compose.yaml` (project
+   `foodiehub-sonar`, profile `sonar`, port `127.0.0.1:9000`). It is kept out of the root `compose.yaml` so it needs no
+   values from `.env` and can never touch MySQL or Keycloak. Its heaps are small and it has a hard 2.5 GB memory cap.
+3. **The embedded H2 database is accepted for local use.** SonarSource supports it for evaluation only (no upgrades,
+   not for production). That is acceptable for one developer's checks, because the analysis history can be rebuilt by
+   re-running the pipeline. A shared or long-lived SonarQube needs PostgreSQL or SonarQube Cloud, and that is a new
+   decision.
+4. **Sequencing:** SonarQube and the Testcontainers tests never run at the same time. The pipeline stops a running
+   SonarQube before the tests, starts it only after the test containers are removed, and stops it after the analysis
+   and in `post { always }`. Every stop uses `stop`, never `down`, so data volumes are kept.
+5. **Two projects:** `zayora-backend` (Maven scanner, JaCoCo coverage) and `zayora-frontend` (`@sonar/scan`, lcov
+   coverage from the Node test runner).
+6. **Quality Gate:** a gate that fails is a failed build (`waitForQualityGate abortPipeline: true`). The result comes
+   back through a SonarQube webhook to Jenkins (`http://host.docker.internal:8088/sonarqube-webhook/`), which is
+   protected with a shared secret. The built-in *Sonar way* gate is not modified. The project gate was created and
+   assigned by the owner (P2.2). New code is measured against the first analysis (*Previous version*).
+7. **Baseline first:** the backend's three CSRF findings were reviewed as false positives with written reasons (the
+   APIs are stateless bearer-token APIs, and a test per service proves cookies never authenticate). The eight frontend
+   findings were fixed, not suppressed.
+8. **The Docker image stage is conditional.** It is skipped until phase 3 adds Dockerfiles, and it runs only after
+   every check has passed.
+9. **Memory of the forked test JVMs is not capped yet.** It will be measured during the first Jenkins run.
+
+**Implemented:** [`Jenkinsfile`](../../Jenkinsfile), [`infra/sonarqube/compose.yaml`](../../infra/sonarqube/compose.yaml),
+[`frontend/sonar-project.properties`](../../frontend/sonar-project.properties), JaCoCo in the three service POMs,
+`npm run test:ci`. The setup and operation are described in [`docs/ci.md`](../ci.md). The SonarQube token lives only in
+the Jenkins credential store and, optionally, in the local `.env` (`SONAR_TOKEN`), never in the repository.
+
+**Not decided by DEC-020:** a hosted or shared CI (and with it build triggers from GitHub), a production SonarQube
+database, a test JVM memory limit, branch or pull-request analysis, and publishing images to a registry (phase 3/4).
 ---
 
 ## 10. Decisions needed next

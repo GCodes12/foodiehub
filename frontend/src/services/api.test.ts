@@ -111,6 +111,15 @@ describe('api client — menu, order list, base URLs, expired sessions', () => {
     assert.deepEqual(urls, ['http://localhost:8081/api/v1/restaurants', 'http://localhost:8082/api/v1/orders']);
   });
 
+  it('removes any number of trailing slashes from the base URLs', async () => {
+    const urls: string[] = [];
+    const fetchImpl = async (url: string) => { urls.push(url); return new Response('[]'); };
+    await createApi(async () => 't', { fetchImpl, restaurantBaseUrl: 'http://localhost:8081///', orderBaseUrl: 'http://localhost:8082//' }).listOrders();
+    await createApi(async () => 't', { fetchImpl, restaurantBaseUrl: 'http://localhost:8081///' }).listRestaurants();
+    await createApi(async () => 't', { fetchImpl, restaurantBaseUrl: '///' }).listRestaurants();
+    assert.deepEqual(urls, ['http://localhost:8082/api/v1/orders', 'http://localhost:8081/api/v1/restaurants', '/api/v1/restaurants']);
+  });
+
   it('fills neutral defaults for menu items from an older Restaurant Service', async () => {
     const body = { restaurantId: 'r1', currency: 'INR', items: [
       { id: 'a', name: 'Plain', price: 10, available: true },

@@ -116,7 +116,8 @@ export type OwnerFormErrors = Partial<Record<keyof CreateOwnerInput, string>>;
 
 export const OWNER_LIMITS = { fullName: 100, email: 254, passwordMin: 10, passwordMax: 64 } as const;
 const USERNAME = /^(?!service-account-)[a-z0-9][a-z0-9._-]{2,49}$/;
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Local part, then a domain of dot-separated labels (no empty label: rejects "a@b..c", "a@.b.c" and a trailing dot).
+const EMAIL = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 
 export function emptyOwnerForm(): CreateOwnerInput {
   return { fullName: '', email: '', username: '', temporaryPassword: '' };

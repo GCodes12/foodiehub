@@ -64,7 +64,7 @@ Keycloak 26.8 (OIDC/JWT) and Docker Compose (optional: MySQL, Keycloak). Everyth
 | Database | MySQL (a single container, with a separate database and users per service) |
 | Service discovery | Consul (implemented early, DEC-019; resilience still planned for M5) |
 | Local infrastructure | Docker + Docker Compose |
-| CI and code quality | Jenkins + SonarQube (planned; introduced at the end of M1) |
+| CI and code quality | Jenkins + SonarQube (local pipeline implemented, DEC-020; see [`docs/ci.md`](docs/ci.md)) |
 
 **Versions (DEC-019):** Spring Cloud has no GA release for Spring Boot 4.1 yet (2026.0 is a release candidate), so the
 backend uses the supported pair Spring Boot 4.0.9 + Spring Cloud 2025.1.4. Moving to 4.1 / 2026.0 is a version bump
@@ -549,7 +549,7 @@ installing Docker Desktop, add `~/.docker/bin` to your `PATH`.
 |---|---|
 | M0 | Repository foundation, toolchain, SDD documents |
 | M1 | Public browsing of restaurants and menus (frontend → gateway → restaurant service) |
-| CI-1 | Jenkins + SonarQube against the M1 code (end of M1) |
+| CI-1 | Jenkins + SonarQube against the M1 code (local pipeline implemented, DEC-020) |
 | M2 | Authenticated checkout with Keycloak; order service |
 | M3 | Simulated payments, order expiry and refunds |
 | M4 | Restaurant-owner workflow, admin functions, notifications |
@@ -564,9 +564,10 @@ Currently available:
 
 - [`docs/sdd/plan.md`](docs/sdd/plan.md) — the overall plan, approval checklist, architecture and milestones.
 - [`docs/sdd/raw-requirement.md`](docs/sdd/raw-requirement.md) — reconstructed owner requirements.
-- [`docs/sdd/clarification.md`](docs/sdd/clarification.md) — open questions and recorded owner decisions (DEC-001 – DEC-017).
+- [`docs/sdd/clarification.md`](docs/sdd/clarification.md) — open questions and recorded owner decisions (DEC-001 – DEC-020).
 - [`docs/sdd/api-admin.md`](docs/sdd/api-admin.md) — administrator API (DEC-017).
+- [`docs/ci.md`](docs/ci.md) — local CI: Jenkins pipeline, SonarQube and Quality Gates (DEC-020).
 - [`docs/sdd/spec.md`](docs/sdd/spec.md) — VS-1 specification (draft).
 - [`docs/sdd/data-model.md`](docs/sdd/data-model.md) — logical data model (draft).
 
-Other API contracts, ADRs, tasks, test strategy and DevOps documents do not exist yet.
+Other API contracts, ADRs, tasks, test strategy and deployment documents do not exist yet.

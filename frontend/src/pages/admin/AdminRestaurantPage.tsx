@@ -40,7 +40,7 @@ export function AdminNewRestaurantPage() {
     try {
       const created = await api.createRestaurant(toCreateRequest(form));
       toast(t('admin.restaurant.created', { name: created.name }));
-      navigate(paths.adminRestaurant(created.id), { replace: true });
+      void navigate(paths.adminRestaurant(created.id), { replace: true });
     } catch (e) {
       setError(e);
     } finally {

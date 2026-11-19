@@ -115,7 +115,8 @@ export function categoryBlurb(code: string): string | null {
 export function categoriesOf(items: MenuItem[]): string[] {
   const present = new Set(items.map((item) => item.category));
   const known = CATEGORY_ORDER.filter((code) => present.has(code));
-  const unknown = [...present].filter((code) => !(CATEGORY_ORDER as readonly string[]).includes(code)).sort();
+  const unknown = [...present].filter((code) => !(CATEGORY_ORDER as readonly string[]).includes(code))
+    .sort((a, b) => a.localeCompare(b, 'en'));
   return [...known, ...unknown];
 }
 

@@ -169,6 +169,26 @@ class OwnerControllerTest {
         verify(owners, never()).ownedRestaurants(anyString());
     }
 
+    /**
+     * CSRF regression guard (Sonar java:S4502 reviewed as not applicable): cookies never authenticate. A token-shaped
+     * value in a cookie plus browser session cookies, without an Authorization header, cannot change a dish; 401, and the
+     * catalogue is never called.
+     */
+    @Test
+    void cookiesWithoutABearerHeaderNeverAuthenticate() throws Exception {
+        String tokenLike = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJvd25lciIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJSRVNUQVVSQU5UX09XTkVSIl19fQ.c2ln";
+        jakarta.servlet.http.Cookie[] cookies = {new jakarta.servlet.http.Cookie("access_token", tokenLike),
+                new jakarta.servlet.http.Cookie("KEYCLOAK_SESSION", "abc"), new jakarta.servlet.http.Cookie("JSESSIONID", "xyz")};
+        String challenge = mvc.perform(patch("/api/v1/owner/restaurants/{r}/menu-items/{i}", RID, ITEM).cookie(cookies)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"available\":false}"))
+                .andExpect(status().isUnauthorized())
+                .andReturn().getResponse().getHeader("WWW-Authenticate");
+        assertThat(challenge).startsWith("Bearer");
+        mvc.perform(get("/api/v1/owner/restaurants").cookie(cookies)).andExpect(status().isUnauthorized());
+        verify(owners, never()).updateMenuItem(anyString(), anyString(), anyString(), any());
+        verify(owners, never()).ownedRestaurants(anyString());
+    }
+
     @Test
     void mapsKeycloakRealmRolesToAuthorities() {
         Jwt token = Jwt.withTokenValue("t").header("alg", "none")

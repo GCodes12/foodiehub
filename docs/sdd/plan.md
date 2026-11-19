@@ -8,7 +8,7 @@ Select text to add comments on the plan
 
 **Verified repository status (re-inspected 2026-11-03, read-only):**
 
-- `/Users/gauravbhandari/Desktop/foodiehub` is a git repository on branch `main`, tracking `origin/main` (remote `origin` = `https://github.com/GCodes12/foodiehub.git`). It was in sync at the last fetch; no network fetch was run.
+- The project directory is a git repository on branch `main`, tracking `origin/main` (remote `origin` = `https://github.com/GCodes12/foodiehub.git`). It was in sync at the last fetch; no network fetch was run.
 - One commit: `772d8c6 chore: initialize FoodieHub repository` with two **empty** files, `.gitignore` and `README.md`. The working tree is clean; no untracked files; no git hooks installed.
 - No application code, SDD docs, build files or infrastructure yet. The project is still greenfield.
 - **Not verified:** GitHub branch protection, secret scanning, Dependabot and repository visibility (`gh` CLI is not installed). These are M0 tasks (§11).
@@ -70,6 +70,9 @@ Select text to add comments on the plan
 > DEC-019 brings the M5 discovery work forward: the API gateway (D2, D3) and Consul discovery with load balancing are
 > implemented; resilience stays in M5. The backend runs Spring Boot 4.0.9 + Spring Cloud 2025.1.4 (no GA Spring Cloud for
 > Boot 4.1 yet).
+> DEC-020 adds local CI: a native Jenkins runs the [`Jenkinsfile`](../../Jenkinsfile) (tests, coverage, SonarQube
+> analysis, Quality Gates) against a SonarQube in Docker with an evaluation-only embedded database; see
+> [`docs/ci.md`](../ci.md).
 
 ### Part B — safe to keep OPEN until its gate (must be answered before that milestone starts; suggested values are not adopted until answered)
 

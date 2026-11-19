@@ -103,6 +103,20 @@ describe('owner form (DEC-018)', () => {
     assert.equal(validateOwnerForm({ ...valid, fullName: 'x'.repeat(101) }).fullName, 'admin.form.errors.tooLong');
   });
 
+  it('checks e-mail addresses: well-formed domains only, length limit kept', async () => {
+    const { validateOwnerForm } = await import('./admin.ts');
+    const emailError = (email: string) => validateOwnerForm({ ...valid, email }).email;
+    for (const email of ['asha@example.com', 'Asha@Example.com', 'a.b+kitchen@mail.example.co.in', 'x@y.io']) {
+      assert.equal(emailError(email), undefined, email);
+    }
+    for (const email of ['not-an-email', 'a@b..com', 'a@.b.com', 'a@b.com.', 'a@b', 'a b@x.com', 'a@@x.com', '@x.com', 'a@x.com@y.com']) {
+      assert.equal(emailError(email), 'admin.ownerForm.errors.email', email);
+    }
+    // The 254-character limit still applies: 250 + "@x.io" = 255 characters.
+    assert.equal(emailError('a'.repeat(250) + '@x.io'), 'admin.ownerForm.errors.email');
+    assert.equal(emailError('a'.repeat(249) + '@x.io'), undefined);
+  });
+
   it('maps duplicate conflicts to their field and derives the account status', async () => {
     const { ownerConflictField, ownerStatus } = await import('./admin.ts');
     assert.equal(ownerConflictField('OWNER_USERNAME_TAKEN'), 'username');

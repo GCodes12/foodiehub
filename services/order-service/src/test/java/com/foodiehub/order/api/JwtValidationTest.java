@@ -185,6 +185,26 @@ class JwtValidationTest {
         verify(orderService, never()).findOwnOrder(anyString(), anyString());
     }
 
+    /**
+     * CSRF regression guard (Sonar java:S4502 reviewed as not applicable): a valid CUSTOMER token sent in cookies, with
+     * no Authorization header, cannot place or read orders. The answer stays 401 and the service is never called.
+     */
+    @Test
+    void cookiesWithoutABearerHeaderNeverAuthenticate() throws Exception {
+        String validToken = tokenWithRoles("CUSTOMER");
+        jakarta.servlet.http.Cookie[] cookies = {new jakarta.servlet.http.Cookie("access_token", validToken),
+                new jakarta.servlet.http.Cookie("KEYCLOAK_IDENTITY", validToken), new jakarta.servlet.http.Cookie("JSESSIONID", "xyz")};
+        MvcResult create = mvc.perform(post("/api/v1/orders").cookie(cookies)
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"restaurantId\":\"r1\",\"fulfilmentType\":\"PICKUP\",\"items\":[{\"menuItemId\":\"m1\",\"quantity\":1}]}"))
+                .andExpect(status().isUnauthorized())
+                .andReturn();
+        assertThat(create.getResponse().getHeader(HttpHeaders.WWW_AUTHENTICATE)).startsWith("Bearer");
+        mvc.perform(get("/api/v1/orders").cookie(cookies)).andExpect(status().isUnauthorized());
+        verifyNoInteractions(orderService);
+    }
+
     // --- Administrator endpoints (DEC-017): the same token checks, plus the ADMIN role --------------------------------
 
     private static String tokenWithRoles(String... roles) throws JOSEException {

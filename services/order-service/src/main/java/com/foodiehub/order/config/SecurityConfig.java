@@ -41,6 +41,9 @@ public class SecurityConfig {
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(KeycloakRoles.authenticationConverter()))
                         .accessDeniedHandler(forbidden(messages)))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // CSRF does not apply (Sonar java:S4502 reviewed): this API is stateless and authenticates only through the
+                // Authorization: Bearer header, which browsers never attach automatically; no cookie or session authenticates
+                // a request. Reconsider CSRF protection if cookie- or session-based authentication is ever introduced.
                 .csrf(csrf -> csrf.disable());
         return http.build();
     }

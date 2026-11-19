@@ -32,6 +32,15 @@ describe('menu browsing', () => {
     assert.equal(categoryName('SEASONAL'), 'Seasonal');
   });
 
+  it('puts several unknown categories after the known ones, in English alphabetical order', () => {
+    const menu = [...MENU, ...['SIDES', 'ZEBRA', 'SIDE_DISH', 'APPLES', 'APPLE_PIE'].map((category) => item(category, { category }))];
+    const categories = categoriesOf(menu);
+    assert.deepEqual(categories.slice(0, 9), ['VEG_BIRYANI', 'EGG_BIRYANI', 'CHICKEN_BIRYANI', 'MUTTON_BIRYANI', 'STARTERS',
+      'ACCOMPANIMENTS', 'DESSERTS', 'BEVERAGES', 'COMBOS']);
+    // "APPLE_PIE" before "APPLES" and "SIDE_DISH" before "SIDES": language order, not raw character codes.
+    assert.deepEqual(categories.slice(9), ['APPLE_PIE', 'APPLES', 'SEASONAL', 'SIDE_DISH', 'SIDES', 'ZEBRA']);
+  });
+
   it('searches name, description and category, ignoring case and spaces', () => {
     assert.deepEqual(filterItems(MENU, { ...NO_FILTERS, query: '  LASSI ' }).map((i) => i.id), ['lassi']);
     assert.deepEqual(filterItems(MENU, { ...NO_FILTERS, query: 'crispy' }).map((i) => i.id), ['c65']);

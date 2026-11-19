@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { ClipboardList, RefreshCw, Search, Store, UtensilsCrossed } from 'lucide-react';
 import { EmptyState } from '../components/common/EmptyState.tsx';
 import { ErrorMessage } from '../components/common/ErrorMessage.tsx';
-import { Modal } from '../components/common/Modal.tsx';
+import { INITIAL_FOCUS, Modal } from '../components/common/Modal.tsx';
 import { Skeleton } from '../components/common/Skeleton.tsx';
 import { useToast } from '../components/common/Toast.tsx';
 import { DishEditor } from '../components/owner/DishEditor.tsx';
@@ -229,7 +229,7 @@ function OrdersTab() {
 }
 
 /** Asks for an optional reason before rejecting (DEC-016); the customer sees the reason. */
-function RejectDialog({ order, onCancel, onConfirm }: {
+export function RejectDialog({ order, onCancel, onConfirm }: {
   order: Order | null; onCancel: () => void; onConfirm: (reason?: RejectReason) => void;
 }) {
   const titleId = useId();
@@ -248,7 +248,7 @@ function RejectDialog({ order, onCancel, onConfirm }: {
         ))}
       </fieldset>
       <div className="confirm-actions">
-        <button type="button" className="btn btn-secondary" onClick={onCancel} autoFocus>{t('kitchen.reject.keep')}</button>
+        <button type="button" className="btn btn-secondary" onClick={onCancel} {...INITIAL_FOCUS}>{t('kitchen.reject.keep')}</button>
         <button type="button" className="btn btn-danger" onClick={() => { onConfirm(reason || undefined); setReason(''); }}>
           {t('kitchen.reject.confirm')}
         </button>
