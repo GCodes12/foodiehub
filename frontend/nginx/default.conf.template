@@ -1,0 +1,45 @@
+# ZAYORA web app (Phase 3). Rendered at container start by the nginx image: ${GATEWAY_URL} is replaced from the
+# environment; nginx's own variables ($uri, $host, ...) are left alone.
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    server_tokens off;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # SAMEORIGIN, not DENY: Keycloak's silent SSO check loads /silent-check-sso.html in a same-origin iframe.
+    add_header X-Frame-Options "SAMEORIGIN" always;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # API calls go to the API gateway unchanged (same path, Authorization header included), as the Vite dev server
+    # does in development. The browser only ever talks to this origin, so no CORS is needed.
+    location /api/ {
+        proxy_pass ${GATEWAY_URL};
+        proxy_http_version 1.1;
+        # $http_host keeps the port the browser used ($host would drop it).
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Vite's fingerprinted files never change under the same name: cache them for a year.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    # Single-page app: unknown paths (/menu, /orders/123, /admin, ...) get index.html and React Router takes over.
+    # index.html itself is never cached, so a new deployment is picked up on the next load.
+    location / {
+        add_header Cache-Control "no-cache";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        try_files $uri $uri/ /index.html;
+    }
+}

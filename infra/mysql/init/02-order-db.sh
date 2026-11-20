@@ -12,5 +12,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES ON 
 
 CREATE USER IF NOT EXISTS 'order_app'@'%' IDENTIFIED BY '${ORDER_DB_APP_PASSWORD}';
 GRANT SELECT, INSERT ON order_db.* TO 'order_app'@'%';
-GRANT UPDATE ON order_db.customer_order TO 'order_app'@'%';
 SQL
+# UPDATE on customer_order (DEC-016) needs the table, which Flyway creates on the service's first start: see
+# infra/mysql/grants/table-grants.sql.

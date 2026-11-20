@@ -53,7 +53,8 @@ reviews, promotions, multiple currencies, partial refunds, mobile apps.
 
 Implemented so far: Java 21, Spring Boot 4.0.9 with Spring Cloud 2025.1.4 (restaurant service, order service, API
 gateway), Spring Cloud Gateway (Server Web MVC), Consul service discovery with Spring Cloud LoadBalancer, MySQL,
-Keycloak 26.8 (OIDC/JWT) and Docker Compose (optional: MySQL, Keycloak). Everything else is planned.
+Keycloak 26.8 (OIDC/JWT), Dockerfiles for the three services and the web app, and Docker Compose (optional: MySQL,
+Keycloak, or the [whole app locally](#full-stack-in-docker-compose-local)). Everything else is planned.
 
 | Area | Planned technology |
 |---|---|
@@ -80,7 +81,7 @@ once that train is GA.
 | Frontend | Implemented ([`frontend/`](frontend/)): ZAYORA web app — React + Vite + React Router; home, menu (categories, search, veg/egg/non-veg filter, price sort, dish detail), cart, protected checkout with a retry-safe `Idempotency-Key`, order confirmation, My Orders, owner Kitchen, admin pages (`/admin`); Keycloak sign-in (PKCE); 143 tests |
 | API gateway and discovery | Implemented (DEC-019): `services/api-gateway` (port 8090) routes `/api/v1/**` to services registered in Consul (port 8500), checks tokens at the edge and balances requests over healthy instances |
 | Payment / notification services | Not started |
-| Build files | Maven Wrapper + root aggregator POM; Docker Compose (local development only) for MySQL, with Keycloak behind the optional `keycloak` profile; a separate Compose file for the local SonarQube. CI: a [`Jenkinsfile`](Jenkinsfile) for a local Jenkins (tests, coverage, SonarQube analysis and Quality Gates; DEC-020, [`docs/ci.md`](docs/ci.md)). No application container images or deployment setup yet |
+| Build files | Maven Wrapper + root aggregator POM; Docker Compose (local development only) for MySQL, with Keycloak behind the optional `keycloak` profile; a separate Compose file for the local SonarQube. CI: a [`Jenkinsfile`](Jenkinsfile) for a local Jenkins (tests, coverage, SonarQube analysis and Quality Gates; DEC-020, [`docs/ci.md`](docs/ci.md)). Dockerfiles for the three services and the web app, and a local full-stack Compose profile `stack` ([below](#full-stack-in-docker-compose-local)). No deployment setup and no published images |
 | Security controls | Keycloak realm `foodiehub` with roles `CUSTOMER`, `RESTAURANT_OWNER` (DEC-015) and `ADMIN` (DEC-017); both services validate JWTs (issuer, signature, audience); only customers order; owners manage only their own restaurant (by account id); customers see only their own orders; admin endpoints need `ADMIN`; the application never grants roles (read-only Keycloak service account). Browsing stays public by design. **Not implemented:** authentication of the internal price lookup (SEC-005) |
 | Payments | **Not available.** No payment processing of any kind exists |
 | Documentation | SDD documents in [`docs/sdd/`](docs/sdd/) |
@@ -542,6 +543,99 @@ The container creates its accounts only when its data volume is first initialise
 `.env` afterwards are not applied. Either use `ALTER USER` inside the container, or reset it with
 `docker compose down -v` (this **deletes** the container's database). If `docker` is not found after
 installing Docker Desktop, add `~/.docker/bin` to your `PATH`.
+
+On a **new** data volume, apply the table-level grants once after the services have started for the first time
+(MySQL only accepts them once Flyway has created the tables):
+
+```bash
+docker exec -i foodiehub-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"' < infra/mysql/grants/table-grants.sql
+```
+
+#### Full stack in Docker Compose (local)
+
+The `stack` profile in [`compose.yaml`](compose.yaml) runs the whole app in containers on your machine: MySQL,
+Keycloak, Consul, the restaurant and order services, the API gateway and the web app. It is a **local development and
+demo setup**, not a production deployment (see the limits below).
+
+**Prerequisites:** Docker Desktop (about 2.5 GB of memory for the stack), JDK 21, Node, and a `.env` copied from
+[`.env.example`](.env.example). Compose reads these keys from `.env`; nothing secret is written in `compose.yaml`:
+
+| Needed for | Keys in `.env` |
+|---|---|
+| MySQL in the stack | `MYSQL_ROOT_PASSWORD`, `RESTAURANT_DB_MIGRATOR_PASSWORD`, `RESTAURANT_DB_APP_PASSWORD`, `ORDER_DB_MIGRATOR_PASSWORD`, `ORDER_DB_APP_PASSWORD` |
+| Keycloak's master admin | `KEYCLOAK_ADMIN_USER`, `KEYCLOAK_ADMIN_PASSWORD` |
+| Admin features (optional) | `KEYCLOAK_ADMIN_API_CLIENT_SECRET` (user directory), `KEYCLOAK_OWNER_PROVISIONER_CLIENT_SECRET` (owner creation); each at least 24 characters, different values |
+| Demo accounts (scripts below) | `FOODIEHUB_DEMO_USER_PASSWORD` (alice, bob, owner); `FOODIEHUB_DEV_ADMIN_USERNAME`, `FOODIEHUB_DEV_ADMIN_PASSWORD` (at least 8 characters) |
+
+**Start.** The images package what is already built, so build first. Stop the local Keycloak and `npm run dev`
+(they use ports 8080 and 5173); a local MySQL can keep running.
+
+```bash
+./mvnw -B -ntp -DskipTests package                 # the three service jars
+(cd frontend && npm ci && npm run build)          # the web app (dist/)
+docker compose --profile stack up -d --build frontend
+docker compose --profile stack ps                 # all "healthy" after about 1–2 minutes; mysql-grants "Exited (0)"
+```
+
+Name `frontend` when starting: it brings up everything it depends on and leaves out the separate `mysql` service
+above (which would clash with a local MySQL on 3306).
+
+**Demo accounts.** Keycloak in the stack starts with the realm but no users. Create them with the same scripts as for
+the local Keycloak (they read `.env` and print no secrets):
+
+```bash
+infra/keycloak/create-dev-users.sh     # alice, bob (CUSTOMER), owner (RESTAURANT_OWNER)
+infra/keycloak/create-dev-admin.sh     # the dev admin (ADMIN), read-only directory client, owner provisioning
+```
+
+Then open http://localhost:5173. Sign in as the admin once and assign ZAYORA to `owner` (*Admin → Restaurants → ZAYORA
+→ Owner → Change owner*); owners are linked by account id, and the stack's Keycloak creates new ids (see the limits).
+The [demo in five minutes](#demo-in-five-minutes) then works as described.
+
+**Stop and clean up.**
+
+```bash
+docker compose --profile stack stop               # stop; database and settings are kept
+docker compose --profile stack up -d frontend     # start again
+docker compose --profile stack logs -f api-gateway   # follow one service's log
+docker compose --profile stack down               # remove the containers (all volumes are kept)
+docker volume rm foodiehub_stack-mysql-data       # after "down": delete the stack's database for a fresh start
+```
+
+`down` also removes the stopped container of the separate `mysql` service, but never its volume;
+`docker compose up -d mysql` recreates it.
+
+**Architecture (local stack).** Only the web app and Keycloak are published, on `127.0.0.1` only:
+
+```
+browser ──▶ 127.0.0.1:5173  frontend (nginx: React app, /api/** ──▶ api-gateway:8090)
+   │                                           │ checks the token, finds services in Consul
+   │                                           ▼
+   │        consul:8500 ◀── register ── restaurant-service:8081 ◀── order-service:8082 (prices, via Consul)
+   │                                           │                         │
+   │                                           ▼                         ▼
+   │                                  mysql-stack:3306 (restaurant_db, order_db; volume stack-mysql-data)
+   └──────▶ 127.0.0.1:8080  keycloak (login; issues tokens for http://localhost:8080/realms/foodiehub)
+            gateway and services fetch its signing keys from keycloak:8080 and check issuer, signature, expiry, audience
+```
+
+The services run with their existing `dev` profile (datasource, Flyway schema and the ZAYORA seed) and take every
+host name and secret from environment variables. A one-shot `mysql-grants` container applies
+[`infra/mysql/grants/table-grants.sql`](infra/mysql/grants/table-grants.sql) after the services' first migrations.
+
+**Known limits of the local stack:**
+
+- Not a production setup: Keycloak runs in `start-dev` mode over plain HTTP, the services use the `dev` profile, the
+  realm only allows `http://localhost:5173`, and `.env` holds development credentials. Never reuse them in production.
+- Keycloak keeps its data inside its container. When the container is recreated (`down`, image change), the demo
+  accounts and client secrets are gone and the accounts get new ids: run both scripts again and re-assign ZAYORA's
+  owner. Restaurants, menus and orders survive in the MySQL volume.
+- One instance per service (fixed container names, so no `--scale`); load balancing across instances is shown in
+  step 8a, not here.
+- The web app's `VITE_*` settings (Keycloak URL, realm, client) are fixed when `dist/` is built.
+- When a backend service is down, the gateway answers `401` instead of `503` for its routes (its error page is
+  protected); a known gateway issue, not caused by Docker.
+- Ports 5173 and 8080 are shared with `npm run dev` and the local Keycloak: run one setup at a time.
 
 ## Milestones (planned)
 

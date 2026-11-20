@@ -1,0 +1,4 @@
+# The build context is frontend/; the image needs only the built app and the nginx template.
+*
+!dist
+!nginx

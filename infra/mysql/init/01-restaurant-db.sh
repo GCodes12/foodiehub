@@ -14,7 +14,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES
 
 CREATE USER IF NOT EXISTS 'restaurant_app'@'%' IDENTIFIED BY '${RESTAURANT_DB_APP_PASSWORD}';
 GRANT SELECT ON restaurant_db.* TO 'restaurant_app'@'%';
-GRANT UPDATE ON restaurant_db.menu_item TO 'restaurant_app'@'%';
-GRANT INSERT, UPDATE ON restaurant_db.restaurant TO 'restaurant_app'@'%';
-GRANT INSERT, UPDATE ON restaurant_db.restaurant_owner TO 'restaurant_app'@'%';
 SQL
+# The table-level grants (UPDATE on menu_item, INSERT/UPDATE on restaurant and restaurant_owner) need the tables, which
+# Flyway creates on the service's first start: see infra/mysql/grants/table-grants.sql.
