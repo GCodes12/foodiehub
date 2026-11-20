@@ -1,0 +1,36 @@
+# Production profile (compose.prod.yaml). Configuration only. Every value comes from environment variables set by the
+# server's .env through Compose; there is no .env import and no default for any host, issuer or secret, so a missing
+# setting stops the service at startup instead of falling back to localhost.
+spring:
+  cloud:
+    consul:
+      host: ${CONSUL_HOST}
+      discovery:
+        hostname: ${SERVICE_HOSTNAME}
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/restaurant_db
+    username: ${RESTAURANT_DB_APP_USER:restaurant_app}
+    password: ${RESTAURANT_DB_APP_PASSWORD}
+  flyway:
+    user: ${RESTAURANT_DB_MIGRATOR_USER:restaurant_migrator}
+    password: ${RESTAURANT_DB_MIGRATOR_PASSWORD}
+    # ZAYORA's restaurant and menu come from the repeatable seed (db/seed/R__seed_demo_restaurant.sql). WARNING: Flyway
+    # re-runs it whenever the file changes, and its upserts reset names, prices, availability and the restaurant's active
+    # flag. Never change that file once the app is live; move later data changes to versioned migrations.
+    locations: classpath:db/migration,classpath:db/seed
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # The public issuer (https://PUBLIC_HOSTNAME/auth/realms/foodiehub); the signing keys come from
+          # spring.security.oauth2.resourceserver.jwt.jwk-set-uri (internal Keycloak address, set by Compose).
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+
+foodiehub:
+  user-directory:
+    server-url: ${KEYCLOAK_URL}
+
+server:
+  # Behind Caddy and nginx: trust X-Forwarded-Proto/-Host so generated URLs use https and the public host name.
+  # The service is reachable only inside the Docker network.
+  forward-headers-strategy: framework

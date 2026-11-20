@@ -1,0 +1,137 @@
+# ZAYORA production override (public ARM64 VM, e.g. Oracle Cloud Always Free). Used ONLY on the server, together with
+# compose.yaml; the local workflow (compose.yaml alone) is unchanged.
+#
+#   docker compose -f compose.yaml -f compose.prod.yaml --profile stack up -d --build
+#
+# Needs Docker Compose 2.24 or newer (for !reset / !override). All settings and secrets come from the server's own .env
+# (template: production.env.example); none is written here. Before the first start: build the jars
+# (./mvnw -B -ntp -DskipTests package) and the web app for production (cd frontend && PUBLIC_HOSTNAME=... npm run build:prod).
+#
+# Public: only Caddy (80/443). Keycloak's port 8080 stays bound to the server's 127.0.0.1 for the admin console over an
+# SSH tunnel; MySQL, Consul, the services and the gateway are reachable only inside the Docker network.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # The local-only MySQL from compose.yaml never runs on the server.
+  mysql:
+    profiles: ["local-only"]
+
+  mysql-stack:
+    environment:
+      # Creates Keycloak's own database on the first start (infra/mysql/init/03-keycloak-db.sh).
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in the production .env}
+    restart: unless-stopped
+    mem_limit: 1g
+    logging: *logging
+
+  # Production mode on MySQL, behind Caddy at https://PUBLIC_HOSTNAME/auth. TLS ends at Caddy; Keycloak trusts its
+  # X-Forwarded-* headers. The realm is imported once, on the first start (later changes: admin console).
+  keycloak:
+    command: ["start", "--import-realm"]
+    environment:
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://mysql-stack:3306/keycloak_db
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in the production .env}
+      KC_HOSTNAME: https://${PUBLIC_HOSTNAME:?set PUBLIC_HOSTNAME in the production .env}/auth
+      # The admin console is not public (Caddy blocks it): open it through an SSH tunnel to the server's 127.0.0.1:8080.
+      KC_HOSTNAME_ADMIN: http://localhost:8080/auth
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HTTP_MANAGEMENT_RELATIVE_PATH: /
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      # Placeholders in the production realm file, resolved during the import.
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:?set PUBLIC_HOSTNAME in the production .env}
+      KEYCLOAK_ADMIN_API_CLIENT_SECRET: ${KEYCLOAK_ADMIN_API_CLIENT_SECRET:?set KEYCLOAK_ADMIN_API_CLIENT_SECRET in the production .env}
+    volumes: !override
+      - ./infra/keycloak/foodiehub-realm.prod.json:/opt/keycloak/data/import/foodiehub-realm.json:ro
+    depends_on:
+      mysql-stack: {condition: service_healthy}
+    healthcheck:
+      start_period: 120s
+    restart: unless-stopped
+    mem_limit: 1536m
+    logging: *logging
+
+  # A single Consul server with a data volume, so service registrations survive a Consul restart. Not published.
+  consul:
+    command: ["agent", "-server", "-bootstrap-expect=1", "-client=0.0.0.0", "-node=zayora-prod", "-log-level=warn"]
+    volumes:
+      - consul-data:/consul/data
+    restart: unless-stopped
+    mem_limit: 256m
+    logging: *logging
+
+  restaurant-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      KEYCLOAK_ISSUER_URI: https://${PUBLIC_HOSTNAME:?set PUBLIC_HOSTNAME in the production .env}/auth/realms/foodiehub
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/auth/realms/foodiehub/protocol/openid-connect/certs
+      KEYCLOAK_URL: http://keycloak:8080/auth
+      KEYCLOAK_ADMIN_API_CLIENT_SECRET: ${KEYCLOAK_ADMIN_API_CLIENT_SECRET:?set KEYCLOAK_ADMIN_API_CLIENT_SECRET in the production .env}
+    restart: unless-stopped
+    logging: *logging
+
+  order-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      KEYCLOAK_ISSUER_URI: https://${PUBLIC_HOSTNAME:?set PUBLIC_HOSTNAME in the production .env}/auth/realms/foodiehub
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/auth/realms/foodiehub/protocol/openid-connect/certs
+    restart: unless-stopped
+    logging: *logging
+
+  api-gateway:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      KEYCLOAK_ISSUER_URI: https://${PUBLIC_HOSTNAME:?set PUBLIC_HOSTNAME in the production .env}/auth/realms/foodiehub
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/auth/realms/foodiehub/protocol/openid-connect/certs
+    restart: unless-stopped
+    logging: *logging
+
+  mysql-grants:
+    logging: *logging
+
+  # Served only through Caddy; the production web build (npm run build:prod) gets its own image tag.
+  frontend:
+    image: zayora/frontend:prod
+    ports: !reset []
+    restart: unless-stopped
+    logging: *logging
+
+  # HTTPS with automatic Let's Encrypt certificates, HTTP -> HTTPS redirect, and the reverse proxy (infra/caddy/Caddyfile).
+  caddy:
+    profiles: ["stack"]
+    image: caddy:2.11.8-alpine
+    container_name: zayora-caddy
+    environment:
+      PUBLIC_HOSTNAME: ${PUBLIC_HOSTNAME:?set PUBLIC_HOSTNAME in the production .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2019/config/ >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    mem_limit: 128m
+    logging: *logging
+
+volumes:
+  consul-data:
+  caddy-data:
+  caddy-config:

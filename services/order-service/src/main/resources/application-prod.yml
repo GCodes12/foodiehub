@@ -1,0 +1,26 @@
+# Production profile (compose.prod.yaml). Configuration only. Every value comes from environment variables set by the
+# server's .env through Compose; there is no .env import and no default for any host, issuer or secret, so a missing
+# setting stops the service at startup instead of falling back to localhost.
+spring:
+  cloud:
+    consul:
+      host: ${CONSUL_HOST}
+      discovery:
+        hostname: ${SERVICE_HOSTNAME}
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/order_db
+    username: ${ORDER_DB_APP_USER:order_app}
+    password: ${ORDER_DB_APP_PASSWORD}
+  flyway:
+    user: ${ORDER_DB_MIGRATOR_USER:order_migrator}
+    password: ${ORDER_DB_MIGRATOR_PASSWORD}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # The public issuer; signing keys from spring.security.oauth2.resourceserver.jwt.jwk-set-uri (set by Compose).
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+
+server:
+  # Behind Caddy, nginx and the gateway: trust X-Forwarded-* (reachable only inside the Docker network).
+  forward-headers-strategy: framework

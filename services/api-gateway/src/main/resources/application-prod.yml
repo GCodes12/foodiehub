@@ -1,0 +1,18 @@
+# Production profile (compose.prod.yaml). Configuration only; no default for any host or issuer, so a missing setting
+# stops the gateway at startup instead of falling back to localhost.
+spring:
+  cloud:
+    consul:
+      host: ${CONSUL_HOST}
+      discovery:
+        hostname: ${SERVICE_HOSTNAME}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # The public issuer; signing keys from spring.security.oauth2.resourceserver.jwt.jwk-set-uri (set by Compose).
+          issuer-uri: ${KEYCLOAK_ISSUER_URI}
+
+server:
+  # Behind Caddy and nginx: trust X-Forwarded-Proto/-Host (the gateway is reachable only inside the Docker network).
+  forward-headers-strategy: framework

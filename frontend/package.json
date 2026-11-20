@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:prod": "node -e \"if (!process.env.PUBLIC_HOSTNAME) { console.error('Set PUBLIC_HOSTNAME (e.g. PUBLIC_HOSTNAME=your.domain npm run build:prod)'); process.exit(1) }\" && tsc --noEmit && vite build --mode prod",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\"",
