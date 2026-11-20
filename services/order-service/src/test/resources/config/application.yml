@@ -1,0 +1,7 @@
+# Tests never need a running Consul (DEC-019): no registration, no discovery. Merged with the main application.yml.
+spring:
+  cloud:
+    consul:
+      enabled: false
+    discovery:
+      enabled: false

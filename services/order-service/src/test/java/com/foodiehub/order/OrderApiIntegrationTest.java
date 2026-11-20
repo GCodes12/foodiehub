@@ -1,0 +1,674 @@
+package com.foodiehub.order;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+import com.foodiehub.order.restaurant.OwnedRestaurantsClient;
+import com.foodiehub.order.restaurant.RestaurantMenu;
+import com.foodiehub.order.restaurant.RestaurantMenuClient;
+import com.foodiehub.order.restaurant.RestaurantNotOrderableException;
+import com.foodiehub.order.restaurant.RestaurantServiceUnavailableException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mysql.MySQLContainer;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+
+/**
+ * Order API against real MySQL 8.4 (Testcontainers): authentication, validation, server-side pricing, snapshots,
+ * single-transaction persistence, idempotency and ownership. Restaurant Service is replaced by a mock; real token
+ * validation against Keycloak is covered by the documented manual end-to-end check.
+ * Skipped (not failed) when Docker is not available.
+ */
+@Testcontainers(disabledWithoutDocker = true)
+@SpringBootTest
+@AutoConfigureMockMvc
+class OrderApiIntegrationTest {
+
+    private static final String RID = "00000000-0000-0000-0000-000000000001";
+    private static final String DOSA = "00000000-0000-0000-0001-000000000001";
+    private static final String PANEER = "00000000-0000-0000-0001-000000000002";
+    private static final String JAMUN = "00000000-0000-0000-0001-000000000004";
+    private static final String ALICE = "sub-alice";
+    private static final String BOB = "sub-bob";
+    private static final SimpleGrantedAuthority CUSTOMER = new SimpleGrantedAuthority("ROLE_CUSTOMER");
+    private static final SimpleGrantedAuthority OWNER = new SimpleGrantedAuthority("ROLE_RESTAURANT_OWNER");
+
+    @Container
+    @ServiceConnection
+    static MySQLContainer mysql = new MySQLContainer("mysql:8.4");
+
+    @Autowired
+    MockMvc mvc;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    @MockitoBean
+    RestaurantMenuClient restaurantMenuClient;
+
+    @MockitoBean
+    OwnedRestaurantsClient ownedRestaurants;
+
+    @BeforeEach
+    void setUp() {
+        jdbc.update("DELETE FROM order_status_change");
+        jdbc.update("DELETE FROM order_item");
+        jdbc.update("DELETE FROM customer_order");
+        given(restaurantMenuClient.fetchMenu(RID)).willReturn(menu("Masala Dosa"));
+    }
+
+    private static RestaurantMenu menu(String dosaName) {
+        return new RestaurantMenu(RID, "INR", List.of(
+                new RestaurantMenu.Item(DOSA, dosaName, new BigDecimal("129.50"), true),
+                new RestaurantMenu.Item(PANEER, "Paneer Butter Masala", new BigDecimal("249.00"), true),
+                new RestaurantMenu.Item(JAMUN, "Gulab Jamun (2 pcs)", new BigDecimal("79.00"), false)));
+    }
+
+    private static String body(String linesJson) {
+        return "{\"restaurantId\":\"" + RID + "\",\"fulfilmentType\":\"PICKUP\",\"items\":[" + linesJson + "]}";
+    }
+
+    private static String line(String id, Object qty) {
+        return "{\"menuItemId\":\"" + id + "\",\"quantity\":" + qty + "}";
+    }
+
+    private static final String VALID = body(line(DOSA, 2) + "," + line(PANEER, 1));
+
+    private static MockHttpServletRequestBuilder createAs(String sub, String key, String json) {
+        MockHttpServletRequestBuilder req = post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(json)
+                .with(jwt().jwt(j -> j.subject(sub)).authorities(CUSTOMER));
+        return key == null ? req : req.header("Idempotency-Key", key);
+    }
+
+    private static String newKey() {
+        return UUID.randomUUID().toString();
+    }
+
+    private int orderCount() {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM customer_order", Integer.class);
+    }
+
+    private int itemCount() {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM order_item", Integer.class);
+    }
+
+    private String idOf(MvcResult result) throws Exception {
+        String json = result.getResponse().getContentAsString();
+        int start = json.indexOf("\"id\":\"") + 6;
+        return json.substring(start, json.indexOf('"', start));
+    }
+
+    // --- Authentication (RR-007, FR-011, SEC-001) -------------------------------------------------------------
+
+    @Test
+    void createWithoutTokenIsRejectedAndCreatesNothing() throws Exception {
+        mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(VALID)
+                        .header("Idempotency-Key", newKey()))
+                .andExpect(status().isUnauthorized());
+        assertThat(orderCount()).isZero();
+        verify(restaurantMenuClient, never()).fetchMenu(anyString());
+    }
+
+    @Test
+    void retrieveWithoutTokenIsRejected() throws Exception {
+        mvc.perform(get("/api/v1/orders/{id}", UUID.randomUUID())).andExpect(status().isUnauthorized());
+    }
+
+    // --- Creation: server pricing, snapshots, one transaction, initial status ---------------------------------
+
+    @Test
+    void createsPendingPaymentOrderPricedByTheServerWithSnapshots() throws Exception {
+        String tampered = body("{\"menuItemId\":\"" + DOSA + "\",\"quantity\":2,\"unitPrice\":1.00},"
+                + line(PANEER, 1)).replace("}]}", "}],\"total\":1.00,\"customerId\":\"" + BOB + "\"}");
+
+        MvcResult result = mvc.perform(createAs(ALICE, newKey(), tampered))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Idempotent-Replayed", "false"))
+                .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"))
+                .andExpect(jsonPath("$.fulfilmentType").value("PICKUP"))
+                .andExpect(jsonPath("$.currency").value("INR"))
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].name").value("Masala Dosa"))
+                .andReturn();
+        String json = result.getResponse().getContentAsString();
+        // Client-sent unit price and total are ignored; exact decimals from the menu are used.
+        assertThat(json).contains("\"unitPrice\":129.50", "\"lineAmount\":259.00", "\"subtotal\":508.00",
+                "\"total\":508.00");
+        String id = idOf(result);
+        assertThat(result.getResponse().getHeader("Location")).isEqualTo("/api/v1/orders/" + id);
+
+        // Persisted durably, owned by the token subject (not the customerId sent in the body).
+        assertThat(jdbc.queryForMap("SELECT customer_id, status, total FROM customer_order WHERE id = ?", id))
+                .containsEntry("customer_id", ALICE).containsEntry("status", "PENDING_PAYMENT")
+                .containsEntry("total", new BigDecimal("508.00"));
+        assertThat(jdbc.queryForList("SELECT line_no, item_name, unit_price, quantity, line_amount FROM order_item "
+                + "WHERE order_id = ? ORDER BY line_no", id))
+                .extracting(r -> r.get("item_name") + "|" + r.get("unit_price") + "|" + r.get("quantity") + "|"
+                        + r.get("line_amount"))
+                .containsExactly("Masala Dosa|129.50|2|259.00", "Paneer Butter Masala|249.00|1|249.00");
+    }
+
+    @Test
+    void storedSnapshotsDoNotChangeWhenTheMenuChanges() throws Exception {
+        String id = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        given(restaurantMenuClient.fetchMenu(RID)).willReturn(menu("Renamed Dosa"));
+
+        mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].name").value("Masala Dosa"));
+    }
+
+    @Test
+    void orderAndItemsAreWrittenInOneTransaction() throws Exception {
+        // An item name too long for the order_item column makes the second INSERT fail after the order row.
+        given(restaurantMenuClient.fetchMenu(RID)).willReturn(menu("x".repeat(250)));
+
+        mvc.perform(createAs(ALICE, newKey(), VALID))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.code").value("STORAGE_FAILED"))
+                .andExpect(jsonPath("$.detail").value("The order could not be stored. No order was created; please retry."));
+
+        assertThat(orderCount()).isZero();
+        assertThat(itemCount()).isZero();
+    }
+
+    @Test
+    void severalUnpaidOrdersPerCustomerAreAllowed() throws Exception {
+        mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated());
+        mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated());
+        assertThat(orderCount()).isEqualTo(2);
+    }
+
+    // --- Validation: request shape and technical bounds (DEC-013, Q-20 / Q-30) -------------------------------
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "EMPTY", "QTY_0", "QTY_51", "QTY_NEGATIVE", "QTY_FRACTION", "QTY_STRING", "TOO_MANY_LINES",
+            "NO_RESTAURANT", "BAD_RESTAURANT_ID", "DELIVERY", "MALFORMED"})
+    void rejectsInvalidRequestsWith400AndCreatesNothing(String kind) throws Exception {
+        String json = switch (kind) {
+            case "EMPTY" -> body("");
+            case "QTY_0" -> body(line(DOSA, 0));
+            case "QTY_51" -> body(line(DOSA, 51));
+            case "QTY_NEGATIVE" -> body(line(DOSA, -1));
+            case "QTY_FRACTION" -> body(line(DOSA, "2.5"));
+            case "QTY_STRING" -> body(line(DOSA, "\"2\""));
+            case "TOO_MANY_LINES" -> {
+                List<String> lines = new ArrayList<>();
+                for (int i = 0; i < 21; i++) {
+                    lines.add(line("item-" + i, 1));
+                }
+                yield body(String.join(",", lines));
+            }
+            case "NO_RESTAURANT" -> VALID.replace("\"restaurantId\":\"" + RID + "\",", "");
+            case "BAD_RESTAURANT_ID" -> VALID.replace(RID, "../admin");
+            case "DELIVERY" -> VALID.replace("PICKUP", "DELIVERY");
+            case "MALFORMED" -> "{not json";
+            default -> throw new IllegalArgumentException(kind);
+        };
+        mvc.perform(createAs(ALICE, newKey(), json))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string("Content-Type", "application/problem+json"));
+        assertThat(orderCount()).isZero();
+    }
+
+    @Test
+    void acceptsTheBoundaryValuesTwentyLinesAndQuantityFifty() throws Exception {
+        List<RestaurantMenu.Item> items = new ArrayList<>();
+        List<String> lines = new ArrayList<>();
+        for (int i = 0; i < 20; i++) {
+            items.add(new RestaurantMenu.Item("item-" + i, "Item " + i, new BigDecimal("10.00"), true));
+            lines.add(line("item-" + i, 50));
+        }
+        given(restaurantMenuClient.fetchMenu(RID)).willReturn(new RestaurantMenu(RID, "INR", items));
+
+        mvc.perform(createAs(ALICE, newKey(), body(String.join(",", lines))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.items.length()").value(20));
+        assertThat(itemCount()).isEqualTo(20);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "short", "has spaces in it", "ünïcode-key-1234"})
+    void requiresAWellFormedIdempotencyKey(String key) throws Exception {
+        mvc.perform(createAs(ALICE, key.isEmpty() ? null : key, VALID))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"));
+        assertThat(orderCount()).isZero();
+    }
+
+    // --- Business rules against the authoritative menu (DEC-008, DEC-013) -------------------------------------
+
+    @Test
+    void rejectsUnavailableItemWith422() throws Exception {
+        mvc.perform(createAs(ALICE, newKey(), body(line(JAMUN, 1))))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("ITEM_UNAVAILABLE"));
+        assertThat(orderCount()).isZero();
+    }
+
+    @Test
+    void rejectsItemFromAnotherMenuWith422() throws Exception {
+        mvc.perform(createAs(ALICE, newKey(), body(line("not-on-this-menu", 1))))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("ITEM_NOT_IN_MENU"));
+        assertThat(orderCount()).isZero();
+    }
+
+    @Test
+    void rejectsNonexistentOrInactiveRestaurantWith422() throws Exception {
+        given(restaurantMenuClient.fetchMenu(RID)).willThrow(new RestaurantNotOrderableException());
+        mvc.perform(createAs(ALICE, newKey(), VALID))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("RESTAURANT_NOT_AVAILABLE"));
+        assertThat(orderCount()).isZero();
+    }
+
+    @Test
+    void createsNothingWhenPricesCannotBeConfirmed() throws Exception {
+        given(restaurantMenuClient.fetchMenu(RID))
+                .willThrow(new RestaurantServiceUnavailableException("down", null));
+        mvc.perform(createAs(ALICE, newKey(), VALID))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("PRICING_UNAVAILABLE"));
+        assertThat(orderCount()).isZero();
+    }
+
+    // --- Idempotency (DEC-006) --------------------------------------------------------------------------------
+
+    @Test
+    void retryWithTheSameKeyReturnsTheOriginalOrderWithoutCreatingAnother() throws Exception {
+        String key = newKey();
+        MvcResult first = mvc.perform(createAs(ALICE, key, VALID)).andExpect(status().isCreated()).andReturn();
+        MvcResult retry = mvc.perform(createAs(ALICE, key, VALID))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Idempotent-Replayed", "true"))
+                .andReturn();
+
+        assertThat(idOf(retry)).isEqualTo(idOf(first));
+        assertThat(retry.getResponse().getContentAsString()).isEqualTo(first.getResponse().getContentAsString());
+        assertThat(orderCount()).isEqualTo(1);
+        verify(restaurantMenuClient, times(1)).fetchMenu(RID);
+    }
+
+    @Test
+    void reusingAKeyForADifferentRequestIsRejected() throws Exception {
+        String key = newKey();
+        mvc.perform(createAs(ALICE, key, VALID)).andExpect(status().isCreated());
+        mvc.perform(createAs(ALICE, key, body(line(DOSA, 5))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
+        assertThat(orderCount()).isEqualTo(1);
+    }
+
+    @Test
+    void keysAreScopedToTheCustomer() throws Exception {
+        String key = newKey();
+        String aliceOrder = idOf(mvc.perform(createAs(ALICE, key, VALID)).andExpect(status().isCreated()).andReturn());
+        String bobOrder = idOf(mvc.perform(createAs(BOB, key, VALID))
+                .andExpect(header().string("Idempotent-Replayed", "false")).andReturn());
+        assertThat(bobOrder).isNotEqualTo(aliceOrder);
+        assertThat(orderCount()).isEqualTo(2);
+    }
+
+    @Test
+    void concurrentRetriesWithTheSameKeyCreateExactlyOneOrder() throws Exception {
+        String key = newKey();
+        ExecutorService pool = Executors.newFixedThreadPool(6);
+        try {
+            List<Callable<MvcResult>> calls = new ArrayList<>();
+            for (int i = 0; i < 6; i++) {
+                calls.add(() -> mvc.perform(createAs(ALICE, key, VALID)).andReturn());
+            }
+            Set<String> ids = new HashSet<>();
+            for (Future<MvcResult> f : pool.invokeAll(calls)) {
+                assertThat(f.get().getResponse().getStatus()).isEqualTo(201);
+                ids.add(idOf(f.get()));
+            }
+            assertThat(ids).hasSize(1);
+        } finally {
+            pool.shutdown();
+        }
+        assertThat(orderCount()).isEqualTo(1);
+        assertThat(itemCount()).isEqualTo(2);
+    }
+
+    // --- Ownership (DEC-013, Q-24; SEC-003, SEC-004) ----------------------------------------------------------
+
+    @Test
+    void onlyTheOrdererCanRetrieveAnOrder() throws Exception {
+        String id = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+
+        mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id))
+                .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"))
+                .andExpect(jsonPath("$.total").value(508.00));
+
+        String othersOrder = mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(BOB))))
+                .andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
+        String missing = UUID.randomUUID().toString();
+        String nonexistent = mvc.perform(get("/api/v1/orders/{id}", missing).with(jwt().jwt(j -> j.subject(BOB))))
+                .andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
+
+        // Indistinguishable apart from the echoed path: no hint that the order exists.
+        assertThat(othersOrder.replace(id, "{id}")).isEqualTo(nonexistent.replace(missing, "{id}"));
+        assertThat(othersOrder).doesNotContain(ALICE, "Masala");
+    }
+
+    // --- Order list (DEC-014, US-04 list) ----------------------------------------------------------------------
+
+    @Test
+    void listShowsOnlyTheCallersOwnOrdersNewestFirst() throws Exception {
+        String first = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        Thread.sleep(5); // distinct created_at values (microsecond precision)
+        String second = idOf(mvc.perform(createAs(ALICE, newKey(), body(line(DOSA, 1))))
+                .andExpect(status().isCreated()).andReturn());
+        String bobs = idOf(mvc.perform(createAs(BOB, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+
+        mvc.perform(get("/api/v1/orders").with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(second))
+                .andExpect(jsonPath("$[1].id").value(first))
+                .andExpect(jsonPath("$[0].items.length()").value(1))
+                .andExpect(jsonPath("$[1].items.length()").value(2))
+                .andExpect(jsonPath("$[1].total").value(508.00))
+                .andExpect(jsonPath("$[?(@.id == '" + bobs + "')]").isEmpty());
+
+        mvc.perform(get("/api/v1/orders").with(jwt().jwt(j -> j.subject(BOB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(bobs));
+    }
+
+    @Test
+    void listIsEmptyForACustomerWithoutOrders() throws Exception {
+        mvc.perform(get("/api/v1/orders").with(jwt().jwt(j -> j.subject("sub-nobody"))))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void listRequiresAuthentication() throws Exception {
+        mvc.perform(get("/api/v1/orders")).andExpect(status().isUnauthorized());
+    }
+
+    // --- Roles (DEC-015, Q-23) and the owner order view -------------------------------------------------------
+
+    @Test
+    void onlyTheCustomerRoleMayPlaceOrders() throws Exception {
+        for (SimpleGrantedAuthority[] roles : new SimpleGrantedAuthority[][] {{}, {OWNER}}) {
+            mvc.perform(post("/api/v1/orders").contentType(MediaType.APPLICATION_JSON).content(VALID)
+                            .header("Idempotency-Key", newKey()).with(jwt().jwt(j -> j.subject("sub-owner")).authorities(roles)))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        }
+        assertThat(orderCount()).isZero();
+        verify(restaurantMenuClient, never()).fetchMenu(anyString());
+    }
+
+    @Test
+    void anOwnerSeesTheOrdersOfTheirRestaurantsOnlyNewestFirst() throws Exception {
+        String first = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        Thread.sleep(5);
+        String second = idOf(mvc.perform(createAs(BOB, newKey(), body(line(DOSA, 1)))).andExpect(status().isCreated()).andReturn());
+        jdbc.update("INSERT INTO customer_order (id, customer_id, restaurant_id, fulfilment_type, status, currency, subtotal, total,"
+                + " idempotency_key, request_hash, created_at) VALUES ('other-r-order', 'sub-x', 'other-restaurant', 'PICKUP',"
+                + " 'PENDING_PAYMENT', 'INR', 10.00, 10.00, 'key-other-1', REPEAT('a', 64), NOW(6))");
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of(RID));
+
+        mvc.perform(get("/api/v1/owner/orders").with(jwt().jwt(j -> j.subject("sub-owner")).authorities(OWNER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(second))
+                .andExpect(jsonPath("$[1].id").value(first))
+                .andExpect(jsonPath("$[0].customerId").doesNotExist());
+    }
+
+    @Test
+    void anOwnerOfNoRestaurantSeesNothing() throws Exception {
+        mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated());
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of());
+        mvc.perform(get("/api/v1/owner/orders").with(jwt().authorities(OWNER)))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void customersCannotUseTheOwnerView() throws Exception {
+        mvc.perform(get("/api/v1/owner/orders").with(jwt().authorities(CUSTOMER)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/owner/orders")).andExpect(status().isUnauthorized());
+        verify(ownedRestaurants, never()).ownedRestaurantIds(anyString());
+    }
+
+    @Test
+    void theOwnerViewReports503WhenOwnershipCannotBeChecked() throws Exception {
+        given(ownedRestaurants.ownedRestaurantIds(anyString()))
+                .willThrow(new OwnedRestaurantsClient.OwnershipUnavailableException(new RuntimeException("down")));
+        mvc.perform(get("/api/v1/owner/orders").with(jwt().authorities(OWNER)))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("OWNER_DATA_UNAVAILABLE"));
+    }
+
+    // --- Order lifecycle (DEC-016) -----------------------------------------------------------------------------
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder move(String orderId, String from,
+            String to, String reason) {
+        String body = "{\"from\":\"" + from + "\",\"status\":\"" + to + "\"" + (reason == null ? "" : ",\"reason\":\"" + reason + "\"") + "}";
+        return patch("/api/v1/owner/orders/{id}/status", orderId).contentType(MediaType.APPLICATION_JSON).content(body)
+                .with(jwt().jwt(j -> j.subject("sub-owner").claim("preferred_username", "owner")).authorities(OWNER));
+    }
+
+    @Test
+    void anOwnerTakesAnOrderFromAcceptedToPickedUpAndTheCustomerSeesEveryStep() throws Exception {
+        String id = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of(RID));
+
+        String[][] steps = {{"PENDING_PAYMENT", "ACCEPTED"}, {"ACCEPTED", "PREPARING"}, {"PREPARING", "READY_FOR_PICKUP"},
+                {"READY_FOR_PICKUP", "PICKED_UP"}};
+        for (String[] step : steps) {
+            mvc.perform(move(id, step[0], step[1], null))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value(step[1]))
+                    .andExpect(jsonPath("$.total").value(508.00));
+            mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
+                    .andExpect(jsonPath("$.status").value(step[1]))
+                    .andExpect(jsonPath("$.statusUpdatedAt").exists());
+        }
+        mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(jsonPath("$.history.length()").value(4))
+                .andExpect(jsonPath("$.history[0].status").value("ACCEPTED"))
+                .andExpect(jsonPath("$.history[3].status").value("PICKED_UP"))
+                .andExpect(jsonPath("$.history[0].changedBy").doesNotExist());
+        assertThat(jdbc.queryForList("SELECT changed_by FROM order_status_change WHERE order_id = ?", String.class, id))
+                .containsOnly("owner").hasSize(4);
+        mvc.perform(get("/api/v1/orders").with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(jsonPath("$[0].status").value("PICKED_UP"))
+                .andExpect(jsonPath("$[0].history").doesNotExist());
+    }
+
+    @Test
+    void anOwnerCanRejectWithAReasonThatTheCustomerSees() throws Exception {
+        String id = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of(RID));
+        mvc.perform(move(id, "PENDING_PAYMENT", "REJECTED", "SOLD_OUT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REJECTED"))
+                .andExpect(jsonPath("$.rejectReason").value("SOLD_OUT"));
+        mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(jsonPath("$.rejectReason").value("SOLD_OUT"))
+                .andExpect(jsonPath("$.history[0].reason").value("SOLD_OUT"));
+        // Final: nothing moves a rejected order.
+        mvc.perform(move(id, "REJECTED", "ACCEPTED", null))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_TRANSITION"));
+    }
+
+    @Test
+    void refusesSkippedSteps_reasonsOutsideARejection_andStaleScreens() throws Exception {
+        String id = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of(RID));
+
+        mvc.perform(move(id, "PENDING_PAYMENT", "READY_FOR_PICKUP", null))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("INVALID_TRANSITION"));
+        mvc.perform(move(id, "PENDING_PAYMENT", "ACCEPTED", "SOLD_OUT"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("INVALID_TRANSITION"));
+        mvc.perform(move(id, "ACCEPTED", "PREPARING", null)) // the screen thinks it was accepted; it was not
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ORDER_CHANGED"));
+        mvc.perform(move(id, "PENDING_PAYMENT", "SHIPPED", null))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
+        mvc.perform(move(id, "PENDING_PAYMENT", "ACCEPTED", null)).andExpect(status().isOk());
+        mvc.perform(move(id, "PENDING_PAYMENT", "ACCEPTED", null)) // a double click: second one is stale
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ORDER_CHANGED"));
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM order_status_change WHERE order_id = ?", Integer.class, id)).isEqualTo(1);
+    }
+
+    @Test
+    void onlyTheOwnerOfTheOrdersRestaurantCanChangeIt() throws Exception {
+        String id = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        given(ownedRestaurants.ownedRestaurantIds(anyString())).willReturn(List.of("another-restaurant"));
+        mvc.perform(move(id, "PENDING_PAYMENT", "ACCEPTED", null))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("ORDER_NOT_FOUND"));
+        mvc.perform(patch("/api/v1/owner/orders/{id}/status", id).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"from\":\"PENDING_PAYMENT\",\"status\":\"ACCEPTED\"}").with(jwt().authorities(CUSTOMER)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/orders/{id}", id).with(jwt().jwt(j -> j.subject(ALICE))))
+                .andExpect(jsonPath("$.status").value("PENDING_PAYMENT"));
+    }
+
+    // --- Platform overview for administrators (DEC-017) --------------------------------------------------------------
+
+    private static final SimpleGrantedAuthority ADMIN = new SimpleGrantedAuthority("ROLE_ADMIN");
+
+    private static MockHttpServletRequestBuilder asAdmin(MockHttpServletRequestBuilder request) {
+        return request.with(jwt().jwt(j -> j.subject("sub-admin")).authorities(ADMIN));
+    }
+
+    /** An order of another restaurant, created at the given instant (stored as UTC, like the service does). */
+    private void insertOrder(String id, String restaurantId, String status, String total, java.time.Instant createdAt) {
+        String at = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS").withZone(java.time.ZoneOffset.UTC)
+                .format(createdAt);
+        jdbc.update("INSERT INTO customer_order (id, customer_id, restaurant_id, fulfilment_type, status, currency, subtotal, total,"
+                + " idempotency_key, request_hash, created_at) VALUES (?, 'sub-x', ?, 'PICKUP', ?, 'INR', ?, ?, ?, REPEAT('a', 64), ?)",
+                id, restaurantId, status, new BigDecimal(total), new BigDecimal(total), "key-" + id, at);
+    }
+
+    @Test
+    void customersOwnersAndAnonymousCallersCannotSeeThePlatformOverview() throws Exception {
+        for (String path : List.of("/api/v1/admin/orders", "/api/v1/admin/orders/summary")) {
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+            for (SimpleGrantedAuthority role : List.of(CUSTOMER, OWNER)) {
+                mvc.perform(get(path).with(jwt().authorities(role)))
+                        .andExpect(status().isForbidden())
+                        .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+            }
+        }
+    }
+
+    @Test
+    void anAdminSeesOrdersAcrossRestaurantsNewestFirstWithoutCustomerIdentity() throws Exception {
+        String first = idOf(mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()).andReturn());
+        Thread.sleep(5);
+        insertOrder("other-1", "other-restaurant", "ACCEPTED", "10.00", java.time.Instant.now());
+
+        mvc.perform(asAdmin(get("/api/v1/admin/orders")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalItems").value(2))
+                .andExpect(jsonPath("$.items[0].id").value("other-1"))
+                .andExpect(jsonPath("$.items[1].id").value(first))
+                .andExpect(jsonPath("$.items[1].items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].customerId").doesNotExist())
+                .andExpect(jsonPath("$.pageable").doesNotExist());
+
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("restaurantId", RID)))
+                .andExpect(jsonPath("$.totalItems").value(1)).andExpect(jsonPath("$.items[0].id").value(first));
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("status", "ACCEPTED")))
+                .andExpect(jsonPath("$.totalItems").value(1)).andExpect(jsonPath("$.items[0].id").value("other-1"));
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("size", "1").param("page", "1")))
+                .andExpect(jsonPath("$.items.length()").value(1)).andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.items[0].id").value(first));
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("size", "100000")))
+                .andExpect(jsonPath("$.size").value(100));
+    }
+
+    @Test
+    void invalidAdminFiltersAre400() throws Exception {
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("status", "SHIPPED")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+        mvc.perform(asAdmin(get("/api/v1/admin/orders").param("restaurantId", "../x")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+    }
+
+    @Test
+    void theSummaryCountsTodayInIndiaAndExcludesRejectedOrdersFromValue() throws Exception {
+        mvc.perform(createAs(ALICE, newKey(), VALID)).andExpect(status().isCreated()); // 508.00, today
+        java.time.ZoneId india = java.time.ZoneId.of("Asia/Kolkata");
+        java.time.Instant todayStart = java.time.LocalDate.now(india).atStartOfDay(india).toInstant();
+        insertOrder("yesterday-1", "other-restaurant", "PICKED_UP", "100.00", todayStart.minusSeconds(60)); // 23:59 IST yesterday
+        insertOrder("rejected-1", RID, "REJECTED", "999.00", java.time.Instant.now());
+
+        mvc.perform(asAdmin(get("/api/v1/admin/orders/summary")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalOrders").value(3))
+                .andExpect(jsonPath("$.ordersToday").value(2))
+                .andExpect(jsonPath("$.totalValue").value(608.00))
+                .andExpect(jsonPath("$.valueToday").value(508.00))
+                .andExpect(jsonPath("$.byStatus.PENDING_PAYMENT").value(1))
+                .andExpect(jsonPath("$.byStatus.REJECTED").value(1))
+                .andExpect(jsonPath("$.byStatus.PREPARING").value(0))
+                .andExpect(jsonPath("$.timeZone").value("Asia/Kolkata"))
+                .andExpect(jsonPath("$.restaurants.length()").value(2))
+                .andExpect(jsonPath("$.restaurants[?(@.restaurantId == '" + RID + "')].orders").value(2))
+                .andExpect(jsonPath("$.restaurants[?(@.restaurantId == '" + RID + "')].ordersToday").value(2))
+                .andExpect(jsonPath("$.restaurants[?(@.restaurantId == 'other-restaurant')].ordersToday").value(0));
+    }
+
+    @Test
+    void theSummaryOfAnEmptyPlatformIsZero() throws Exception {
+        mvc.perform(asAdmin(get("/api/v1/admin/orders/summary")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalOrders").value(0))
+                .andExpect(jsonPath("$.totalValue").value(0.00))
+                .andExpect(jsonPath("$.restaurants").isEmpty());
+    }
+}

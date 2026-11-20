@@ -1,0 +1,68 @@
+spring:
+  application:
+    name: order-service
+  cloud:
+    # DEC-019: register in Consul; other services and the gateway find this one by name (order-service), never by a fixed URL.
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        # Unique per running instance, so two instances of the same service can register side by side.
+        instance-id: ${spring.application.name}-${server.port}-${random.value}
+        hostname: ${SERVICE_HOSTNAME:localhost}
+        prefer-ip-address: false
+        health-check-path: /actuator/health
+        health-check-interval: 10s
+        health-check-critical-timeout: 60s
+  messages:
+    # Client-facing texts live in messages.properties. Never pick a bundle from the machine's locale.
+    basename: messages
+    fallback-to-system-locale: false
+  jpa:
+    open-in-view: false
+    hibernate:
+      # The schema is owned by Flyway migrations; Hibernate never changes it.
+      ddl-auto: none
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    locations: classpath:db/migration
+  jackson:
+    # Quantities must be whole numbers: reject 2.5 and "2" instead of silently converting them.
+    deserialization:
+      accept-float-as-int: false
+    mapper:
+      allow-coercion-of-scalars: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Tokens must come from the FoodieHub realm and be issued for this service.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/foodiehub}
+          audiences: order-service
+
+management:
+  # DEC-019: only the health endpoint is exposed (Consul's health check). It reveals no details.
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+server:
+  port: ${ORDER_SERVICE_PORT:8082}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+foodiehub:
+  restaurant-service:
+    # Internal REST call for authoritative prices and availability (DEC-013, Q-29). DEC-019: by default the host is the
+    # Consul service name and Spring Cloud LoadBalancer picks a healthy instance (round robin). Set load-balanced: false
+    # and a real URL to call one instance directly (for example without Consul).
+    base-url: ${RESTAURANT_SERVICE_URL:http://restaurant-service}
+    load-balanced: ${RESTAURANT_SERVICE_LOAD_BALANCED:true}
+    connect-timeout: 2s
+    read-timeout: 3s

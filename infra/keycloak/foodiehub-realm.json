@@ -1,0 +1,167 @@
+{
+  "realm": "foodiehub",
+  "displayName": "FoodieHub (local development)",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "clients": [
+    {
+      "clientId": "foodiehub-frontend",
+      "name": "FoodieHub web app",
+      "description": "Browser app (React + Vite). Authorization code flow with PKCE; no client secret.",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "order-service audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "order-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "restaurant-service audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "restaurant-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "foodiehub-dev-cli",
+      "name": "FoodieHub local API testing (dev only)",
+      "description": "DEV ONLY: password grant for curl / Bruno / Postman against local services. Never enable outside local development.",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "order-service audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "order-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "restaurant-service audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "restaurant-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "foodiehub-admin-api",
+      "name": "FoodieHub restaurant-service → Keycloak (read-only)",
+      "description": "DEC-017: read-only service account (view users/realm, query users) for restaurant-service; never grants roles. Secret: create-dev-admin.sh (dev) or the admin console (production).",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    },
+    {
+      "clientId": "foodiehub-owner-provisioner",
+      "name": "FoodieHub restaurant-service → Keycloak (owner provisioning)",
+      "description": "DEC-018: creates owner accounts only inside group restaurant-owners (fine-grained permissions). No realm-management roles. Secret: create-dev-admin.sh / admin console.",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-foodiehub-admin-api",
+      "enabled": true,
+      "serviceAccountClientId": "foodiehub-admin-api",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "view-realm"
+        ]
+      }
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "CUSTOMER",
+        "description": "May place orders (Q-23, DEC-015)"
+      },
+      {
+        "name": "RESTAURANT_OWNER",
+        "description": "Manages own restaurants (DEC-015)"
+      },
+      {
+        "name": "ADMIN",
+        "description": "Platform administrator: restaurants, owner assignment, platform overview (DEC-017). Never granted to demo users."
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "restaurant-owners",
+      "path": "/restaurant-owners",
+      "realmRoles": [
+        "RESTAURANT_OWNER"
+      ]
+    }
+  ]
+}

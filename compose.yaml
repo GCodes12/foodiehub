@@ -1,0 +1,216 @@
+# Local development infrastructure (DEC-004: local development and portfolio demos only). Not a production setup.
+#
+# Usage: cp .env.example .env  (then set passwords), then one of:
+#   docker compose up -d mysql                      MySQL only, for services run on the host (unchanged)
+#   docker compose --profile keycloak up -d keycloak   Keycloak only, instead of the local install (unchanged)
+#   docker compose --profile stack up -d --build frontend    the whole app in containers: http://localhost:5173
+#   docker compose --profile stack stop                       stop it (data stays in the stack-mysql-data volume)
+# Prefer "stop" to "down": "down" also removes the stopped containers of every service, including "mysql" (its volume
+# stays; "docker compose up -d mysql" recreates the container).
+#
+# Name "frontend" when starting the stack: it brings up everything it depends on, and leaves out the "mysql" service
+# (which has no profile and would otherwise start too, clashing with a local MySQL on 3306).
+#
+# The "stack" profile runs ZAYORA end to end: mysql-stack, keycloak, consul, restaurant-service, order-service,
+# api-gateway and frontend. Build the jars and the web app first (./mvnw package, cd frontend && npm run build); the
+# images only package them. Only the web app (127.0.0.1:5173) and Keycloak (127.0.0.1:8080, needed for the browser
+# login) are published, both on localhost only. Stop the local Keycloak and `npm run dev` first, since they use the
+# same ports. Secrets come from .env through ${...} only; nothing secret is written here.
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: foodiehub-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      RESTAURANT_DB_MIGRATOR_PASSWORD: ${RESTAURANT_DB_MIGRATOR_PASSWORD:?set RESTAURANT_DB_MIGRATOR_PASSWORD in .env}
+      RESTAURANT_DB_APP_PASSWORD: ${RESTAURANT_DB_APP_PASSWORD:?set RESTAURANT_DB_APP_PASSWORD in .env}
+      ORDER_DB_MIGRATOR_PASSWORD: ${ORDER_DB_MIGRATOR_PASSWORD:?set ORDER_DB_MIGRATOR_PASSWORD in .env}
+      ORDER_DB_APP_PASSWORD: ${ORDER_DB_APP_PASSWORD:?set ORDER_DB_APP_PASSWORD in .env}
+    ports:
+      # Bound to localhost only.
+      - "127.0.0.1:${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Optional alternative to the local Keycloak install. Start with: docker compose --profile keycloak up -d keycloak
+  # Also part of the stack. Dev mode keeps its data inside the container: demo users (infra/keycloak/create-dev-users.sh)
+  # and the admin setup (create-dev-admin.sh) must be created again after the container is recreated.
+  keycloak:
+    profiles: ["keycloak", "stack"]
+    image: quay.io/keycloak/keycloak:26.8.1
+    container_name: foodiehub-keycloak
+    command: ["start-dev", "--import-realm", "--hostname=http://localhost:8080"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:?set KEYCLOAK_ADMIN_USER in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+      # Health endpoints on the internal management port 9000 (not published), for the health check below.
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./infra/keycloak/foodiehub-realm.json:/opt/keycloak/data/import/foodiehub-realm.json:ro
+    healthcheck:
+      # The image has no curl or wget; bash can make the HTTP request itself.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # --- Full stack (profile "stack") ------------------------------------------------------------------------------
+
+  # The stack's own MySQL: same image and init scripts as "mysql", but not published (no clash with a local MySQL on
+  # 3306) and with its own volume, so the "mysql" service's data is never touched.
+  mysql-stack:
+    profiles: ["stack"]
+    image: mysql:8.4
+    container_name: zayora-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      RESTAURANT_DB_MIGRATOR_PASSWORD: ${RESTAURANT_DB_MIGRATOR_PASSWORD:?set RESTAURANT_DB_MIGRATOR_PASSWORD in .env}
+      RESTAURANT_DB_APP_PASSWORD: ${RESTAURANT_DB_APP_PASSWORD:?set RESTAURANT_DB_APP_PASSWORD in .env}
+      ORDER_DB_MIGRATOR_PASSWORD: ${ORDER_DB_MIGRATOR_PASSWORD:?set ORDER_DB_MIGRATOR_PASSWORD in .env}
+      ORDER_DB_APP_PASSWORD: ${ORDER_DB_APP_PASSWORD:?set ORDER_DB_APP_PASSWORD in .env}
+    volumes:
+      - stack-mysql-data:/var/lib/mysql
+      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # Service discovery (DEC-019): a single in-memory dev agent, like infra/consul/start-local-consul.sh. Not published.
+  consul:
+    profiles: ["stack"]
+    image: hashicorp/consul:2.1.0
+    container_name: zayora-consul
+    command: ["agent", "-dev", "-client=0.0.0.0", "-node=zayora-stack", "-log-level=warn"]
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  restaurant-service:
+    profiles: ["stack"]
+    build: services/restaurant-service
+    image: zayora/restaurant-service:local
+    container_name: zayora-restaurant-service
+    environment: &service-env
+      # The existing dev profile: datasource, Flyway (schema + ZAYORA seed) from the variables below.
+      SPRING_PROFILES_ACTIVE: dev
+      MYSQL_HOST: mysql-stack
+      MYSQL_PORT: "3306"
+      RESTAURANT_DB_APP_PASSWORD: ${RESTAURANT_DB_APP_PASSWORD:?set RESTAURANT_DB_APP_PASSWORD in .env}
+      RESTAURANT_DB_MIGRATOR_PASSWORD: ${RESTAURANT_DB_MIGRATOR_PASSWORD:?set RESTAURANT_DB_MIGRATOR_PASSWORD in .env}
+      CONSUL_HOST: consul
+      SERVICE_HOSTNAME: restaurant-service
+      # Tokens are issued for the browser's Keycloak address (localhost:8080) and their issuer is checked against it;
+      # the signing keys are fetched over the container network. Signature, issuer, expiry and audience stay validated.
+      KEYCLOAK_ISSUER_URI: http://localhost:8080/realms/foodiehub
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/foodiehub/protocol/openid-connect/certs
+      # Admin user directory / owner provisioning (DEC-017, DEC-018): optional; without the secrets those features
+      # answer 503. The secrets must also be set in this Keycloak (infra/keycloak/create-dev-admin.sh).
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_API_CLIENT_SECRET: ${KEYCLOAK_ADMIN_API_CLIENT_SECRET:-}
+      KEYCLOAK_OWNER_PROVISIONER_CLIENT_SECRET: ${KEYCLOAK_OWNER_PROVISIONER_CLIENT_SECRET:-}
+    mem_limit: 512m
+    depends_on:
+      mysql-stack: {condition: service_healthy}
+      consul: {condition: service_healthy}
+    healthcheck: &java-health
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8081/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  order-service:
+    profiles: ["stack"]
+    build: services/order-service
+    image: zayora/order-service:local
+    container_name: zayora-order-service
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      MYSQL_HOST: mysql-stack
+      MYSQL_PORT: "3306"
+      ORDER_DB_APP_PASSWORD: ${ORDER_DB_APP_PASSWORD:?set ORDER_DB_APP_PASSWORD in .env}
+      ORDER_DB_MIGRATOR_PASSWORD: ${ORDER_DB_MIGRATOR_PASSWORD:?set ORDER_DB_MIGRATOR_PASSWORD in .env}
+      CONSUL_HOST: consul
+      SERVICE_HOSTNAME: order-service
+      KEYCLOAK_ISSUER_URI: http://localhost:8080/realms/foodiehub
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/foodiehub/protocol/openid-connect/certs
+    mem_limit: 512m
+    depends_on:
+      mysql-stack: {condition: service_healthy}
+      consul: {condition: service_healthy}
+    healthcheck:
+      <<: *java-health
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8082/actuator/health | grep -q '\"status\":\"UP\"'"]
+
+  api-gateway:
+    profiles: ["stack"]
+    build: services/api-gateway
+    image: zayora/api-gateway:local
+    container_name: zayora-api-gateway
+    environment:
+      CONSUL_HOST: consul
+      SERVICE_HOSTNAME: api-gateway
+      KEYCLOAK_ISSUER_URI: http://localhost:8080/realms/foodiehub
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/foodiehub/protocol/openid-connect/certs
+    mem_limit: 384m
+    depends_on:
+      consul: {condition: service_healthy}
+      restaurant-service: {condition: service_healthy}
+      order-service: {condition: service_healthy}
+    healthcheck:
+      <<: *java-health
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8090/actuator/health | grep -q '\"status\":\"UP\"'"]
+
+  # One-shot job: applies the table-level grants (infra/mysql/grants/table-grants.sql) once both services have created
+  # their tables with Flyway. Idempotent; exits when done. The root password reaches the client through MYSQL_PWD only.
+  mysql-grants:
+    profiles: ["stack"]
+    image: mysql:8.4
+    container_name: zayora-mysql-grants
+    environment:
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+    entrypoint: ["sh", "-c", "mysql -h mysql-stack -uroot < /grants/table-grants.sql && echo 'table grants applied'"]
+    volumes:
+      - ./infra/mysql/grants:/grants:ro
+    restart: "no"
+    depends_on:
+      restaurant-service: {condition: service_healthy}
+      order-service: {condition: service_healthy}
+
+  # The web app: nginx serves dist/ and forwards /api to the gateway (GATEWAY_URL defaults to http://api-gateway:8090).
+  # Published on 5173 because the Keycloak realm only accepts logins from http://localhost:5173.
+  frontend:
+    profiles: ["stack"]
+    build: frontend
+    image: zayora/frontend:local
+    container_name: zayora-frontend
+    ports:
+      - "127.0.0.1:5173:8080"
+    mem_limit: 64m
+    depends_on:
+      api-gateway: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+      mysql-grants: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+volumes:
+  mysql-data:
+  stack-mysql-data:

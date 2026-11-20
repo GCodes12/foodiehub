@@ -1,0 +1,15 @@
+# Local development / portfolio demo profile (DEC-004). Not a production configuration.
+# Values come from environment variables, which may be supplied by the git-ignored .env file
+# (repository root, or the working directory). Real OS environment variables take precedence.
+spring:
+  config:
+    import:
+      - optional:file:../../.env[.properties]
+      - optional:file:.env[.properties]
+  datasource:
+    url: ${ORDER_DB_URL:jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/order_db}
+    username: ${ORDER_DB_APP_USER:order_app}
+    password: ${ORDER_DB_APP_PASSWORD}
+  flyway:
+    user: ${ORDER_DB_MIGRATOR_USER:order_migrator}
+    password: ${ORDER_DB_MIGRATOR_PASSWORD}

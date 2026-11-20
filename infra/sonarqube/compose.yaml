@@ -1,0 +1,52 @@
+# Optional SonarQube for code analysis (DEC-020). Not needed to run ZAYORA. Kept out of the root compose.yaml so it needs
+# no secrets from .env: the same command works on your machine and in the Jenkins workspace, and it can never touch
+# MySQL or Keycloak.
+#
+#   start:  docker compose -f infra/sonarqube/compose.yaml --profile sonar up -d --wait sonarqube
+#   stop:   docker compose -f infra/sonarqube/compose.yaml --profile sonar stop sonarqube
+#
+# Sized for an 8 GB machine with a 3.8 GB Docker VM: embedded H2 database (evaluation only, not for production), small
+# heaps and a hard memory cap. Run it only for analysis, never alongside the Testcontainers test run (the CI pipeline
+# starts it after the tests and stops it afterwards).
+name: foodiehub-sonar
+
+services:
+  sonarqube:
+    profiles: ["sonar"]
+    image: sonarqube:26.11.0.134175-community
+    container_name: foodiehub-sonarqube
+    environment:
+      # Elasticsearch: 512 MB, minimum = maximum as Elasticsearch requires.
+      SONAR_SEARCH_JAVAOPTS: "-Xms512m -Xmx512m"
+      # Web server and Compute Engine (background analysis processing).
+      SONAR_WEB_JAVAOPTS: "-Xms128m -Xmx384m"
+      SONAR_CE_JAVAOPTS: "-Xms128m -Xmx384m"
+      SONAR_TELEMETRY_ENABLE: "false"
+    # Heaps total 1.28 GB; the cap leaves room for non-heap memory and keeps SonarQube from taking the whole Docker VM.
+    mem_limit: 2560m
+    # Lets Elasticsearch and the H2 database shut down cleanly.
+    stop_grace_period: 60s
+    # SonarQube's documented minimums (Elasticsearch bootstrap checks stay enabled).
+    ulimits:
+      nofile:
+        soft: 131072
+        hard: 131072
+      nproc: 8192
+    ports:
+      - "127.0.0.1:${SONAR_PORT:-9000}:9000"
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+      - sonarqube-logs:/opt/sonarqube/logs
+    healthcheck:
+      # curl is installed in the official image (its Dockerfile installs it explicitly).
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9000/api/system/status | grep -q '\"status\":\"UP\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
+volumes:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonarqube-logs:

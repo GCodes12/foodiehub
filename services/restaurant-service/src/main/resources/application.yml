@@ -1,0 +1,70 @@
+spring:
+  application:
+    name: restaurant-service
+  cloud:
+    # DEC-019: register in Consul; other services and the gateway find this one by name (restaurant-service), never by a fixed URL.
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        # Unique per running instance, so two instances of the same service can register side by side.
+        instance-id: ${spring.application.name}-${server.port}-${random.value}
+        hostname: ${SERVICE_HOSTNAME:localhost}
+        prefer-ip-address: false
+        health-check-path: /actuator/health
+        health-check-interval: 10s
+        health-check-critical-timeout: 60s
+  messages:
+    # Client-facing texts live in messages.properties. Never pick a bundle from the machine's locale.
+    basename: messages
+    fallback-to-system-locale: false
+  jpa:
+    open-in-view: false
+    hibernate:
+      # The schema is owned by Flyway migrations; Hibernate never changes it.
+      ddl-auto: none
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # DEC-015: only the owner endpoints need a token. It must come from the FoodieHub realm and be issued
+          # for this service.
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8080/realms/foodiehub}
+          audiences: restaurant-service
+  flyway:
+    # Schema only. Demo seed data is added by the dev profile (application-dev.yml).
+    locations: classpath:db/migration
+
+foodiehub:
+  # DEC-017: read-only Keycloak user directory (owner list, owner-assignment checks, user counts) through the
+  # service account of the confidential client foodiehub-admin-api. Without a secret the directory is disabled:
+  # those admin features answer 503 and everything else keeps working.
+  user-directory:
+    server-url: ${KEYCLOAK_URL:http://localhost:8080}
+    realm: ${KEYCLOAK_REALM:foodiehub}
+    client-id: ${KEYCLOAK_ADMIN_API_CLIENT_ID:foodiehub-admin-api}
+    client-secret: ${KEYCLOAK_ADMIN_API_CLIENT_SECRET:}
+    connect-timeout: 2s
+    read-timeout: 3s
+  # DEC-018: administrators create owner accounts through the separate confidential client foodiehub-owner-provisioner,
+  # which may only create users inside the owners group. Without a secret, owner creation is disabled (503).
+  owner-provisioning:
+    client-id: ${KEYCLOAK_OWNER_PROVISIONER_CLIENT_ID:foodiehub-owner-provisioner}
+    client-secret: ${KEYCLOAK_OWNER_PROVISIONER_CLIENT_SECRET:}
+    owner-group: ${KEYCLOAK_OWNER_GROUP:restaurant-owners}
+
+management:
+  # DEC-019: only the health endpoint is exposed (Consul's health check). It reveals no details.
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+server:
+  port: ${RESTAURANT_SERVICE_PORT:8081}
+  error:
+    include-message: never
+    include-stacktrace: never

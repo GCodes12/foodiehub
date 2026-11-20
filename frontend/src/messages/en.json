@@ -1,0 +1,669 @@
+{
+  "app": {
+    "name": "ZAYORA",
+    "tagline": "Where hunger meets flavours.",
+    "description": "A modern Indian food experience — aromatic dum biryanis, authentic flavours and freshly prepared favourites, ready for pickup.",
+    "logoAlt": "ZAYORA — Where hunger meets flavours."
+  },
+  "nav": {
+    "main": "Main navigation",
+    "home": "Home",
+    "menu": "Explore Menu",
+    "story": "Our Story",
+    "myOrders": "My Orders",
+    "cart": "Cart",
+    "cartAria_one": "Cart, {count} item",
+    "cartAria_other": "Cart, {count} items",
+    "login": "Login",
+    "logout": "Log out",
+    "profile": "Signed in as {name}",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "signInUnavailable": "Sign-in unavailable",
+    "homeAria": "ZAYORA home",
+    "skipToContent": "Skip to content",
+    "kitchen": "Kitchen",
+    "admin": "Admin"
+  },
+  "home": {
+    "metaTitle": "Biryani & Indian food for pickup",
+    "eyebrow": "A Modern Indian Food Experience",
+    "title": "Cravings Deserve Something Extraordinary.",
+    "subtitle": "Discover aromatic dum biryanis, authentic Indian flavours and freshly prepared favourites.",
+    "ctaMenu": "Explore Our Menu",
+    "ctaSpecials": "Discover Our Specials",
+    "heroAlt": "A bowl of aromatic biryani",
+    "highlights": {
+      "dum": "Slow-cooked dum biryani",
+      "pickup": "Order ahead, pick up hot",
+      "prices": "Live menu prices"
+    },
+    "categoriesTitle": "Browse by category",
+    "categoriesSubtitle": "From smoky dum biryanis to cool lassis — find your craving.",
+    "signatureTitle": "ZAYORA signature biryanis",
+    "signatureSubtitle": "Our chef's specials and most-loved biryanis, sealed and slow-cooked in the handi.",
+    "bestsellersTitle": "Bestsellers",
+    "bestsellersSubtitle": "The dishes our guests come back for.",
+    "vegTitle": "Vegetarian favourites",
+    "vegSubtitle": "Paneer, vegetables and lentils, cooked with the same care.",
+    "nonVegTitle": "Non-vegetarian favourites",
+    "nonVegSubtitle": "Chicken and mutton — rich, spiced and tender.",
+    "sidesTitle": "Starters & accompaniments",
+    "sidesSubtitle": "Begin with a starter and complete your biryani with raita and salan.",
+    "combosTitle": "Combos & family meals",
+    "combosSubtitle": "Complete meals for one, two or the whole family.",
+    "storyTitle": "The art of dum",
+    "storyText": "At ZAYORA, every biryani is layered by hand and sealed in a handi to cook slowly in its own steam — the way it has been done for generations.",
+    "storyCta": "Read our story",
+    "reviewsTitle": "What guests say",
+    "reviewsSample": "Sample reviews — shown for demonstration. Real customer reviews are not collected yet.",
+    "reviews": {
+      "r1Text": "The Hyderabadi mutton biryani was rich and fragrant — exactly how I remember it from home.",
+      "r1Name": "Sample guest",
+      "r2Text": "Ordered ahead, walked in and it was ready. The mirchi salan is a must with any biryani.",
+      "r2Name": "Sample guest",
+      "r3Text": "Great vegetarian options. The paneer tikka biryani had a lovely smoky flavour.",
+      "r3Name": "Sample guest"
+    },
+    "viewAll": "View all",
+    "viewMenu": "View the full menu"
+  },
+  "categories": {
+    "VEG_BIRYANI": {
+      "name": "Veg Biryani",
+      "blurb": "Garden vegetables, dum-cooked"
+    },
+    "PANEER_BIRYANI": {
+      "name": "Paneer Biryani",
+      "blurb": "Smoky and creamy paneer"
+    },
+    "EGG_BIRYANI": {
+      "name": "Egg Biryani",
+      "blurb": "Masala-roasted eggs"
+    },
+    "CHICKEN_BIRYANI": {
+      "name": "Chicken Biryani",
+      "blurb": "Our most-loved classics"
+    },
+    "MUTTON_BIRYANI": {
+      "name": "Mutton Biryani",
+      "blurb": "Slow-cooked and tender"
+    },
+    "STARTERS": {
+      "name": "Starters",
+      "blurb": "From the tandoor and the kadai"
+    },
+    "CURRIES": {
+      "name": "Curries",
+      "blurb": "Rich gravies and dal"
+    },
+    "ACCOMPANIMENTS": {
+      "name": "Accompaniments",
+      "blurb": "Raita, salan and more"
+    },
+    "DESSERTS": {
+      "name": "Desserts",
+      "blurb": "A sweet finish"
+    },
+    "BEVERAGES": {
+      "name": "Beverages",
+      "blurb": "Lassi, chaas and drinks"
+    },
+    "COMBOS": {
+      "name": "Combos",
+      "blurb": "Meals for one, two or four"
+    },
+    "OTHER": {
+      "name": "More dishes",
+      "blurb": ""
+    },
+    "from": "From {price}"
+  },
+  "diet": {
+    "VEG": "Vegetarian",
+    "EGG": "Contains egg",
+    "NON_VEG": "Non-vegetarian"
+  },
+  "dish": {
+    "bestseller": "Bestseller",
+    "chefSpecial": "Chef's special",
+    "soldOut": "Sold out",
+    "available": "Available",
+    "unavailable": "Currently unavailable",
+    "add": "Add",
+    "addAria": "Add {name} to cart",
+    "added": "{name} added to cart",
+    "addedMany": "{quantity} × {name} added to cart",
+    "addToCart": "Add to cart · {total}",
+    "details": "View details for {name}",
+    "close": "Close",
+    "quantity": "Quantity",
+    "pickupNote": "Freshly prepared for pickup at the restaurant counter."
+  },
+  "menu": {
+    "metaTitle": "Explore the menu",
+    "title": "Explore our menu",
+    "subtitle": "Biryanis, starters, curries, desserts and more — all prepared fresh for pickup.",
+    "searchLabel": "Search the menu",
+    "searchPlaceholder": "Search biryani, paneer, lassi…",
+    "clearSearch": "Clear search",
+    "allCategories": "All",
+    "categoriesLabel": "Menu categories",
+    "dietLabel": "Diet",
+    "dietAll": "All",
+    "sortLabel": "Sort by",
+    "sort": {
+      "RECOMMENDED": "Recommended",
+      "PRICE_ASC": "Price: low to high",
+      "PRICE_DESC": "Price: high to low"
+    },
+    "resultCount_one": "{count} dish",
+    "resultCount_other": "{count} dishes",
+    "noMatchesTitle": "No dishes match your filters",
+    "noMatchesText": "Try another search or clear the filters.",
+    "clearFilters": "Clear filters",
+    "loading": "Loading the menu…",
+    "unavailableTitle": "The menu isn't available right now",
+    "maxQuantity": "You can order at most {max} of one dish.",
+    "tooManyLines": "An order can contain at most {max} different dishes.",
+    "otherRestaurant": "Your cart has dishes from another restaurant. Start a new cart with this dish?",
+    "pickupOnly": "Pickup only",
+    "pricesInInr": "Prices in INR, including all charges",
+    "labels": {
+      "BESTSELLER": "Bestsellers",
+      "CHEF_SPECIAL": "Chef's specials",
+      "SIGNATURE": "Signature biryanis"
+    },
+    "removeFilter": "Remove filter: {name}"
+  },
+  "menuViews": {
+    "label": "Choose a menu",
+    "homeTitle": "Veg or non-veg? Pick your menu",
+    "homeSubtitle": "Every dish is clearly marked. Jump straight to the food you eat.",
+    "open_one": "Open the menu · {count} dish",
+    "open_other": "Open the menu · {count} dishes",
+    "ALL": {
+      "title": "Full menu",
+      "count_one": "{count} dish",
+      "count_other": "{count} dishes",
+      "note": "Everything we cook"
+    },
+    "VEG": {
+      "title": "Veg menu",
+      "kicker": "100% vegetarian",
+      "count_one": "{count} vegetarian dish",
+      "count_other": "{count} vegetarian dishes",
+      "note": "Paneer, veg biryanis, sides & sweets",
+      "description": "Dum-cooked veg and paneer biryanis, tandoori paneer, dal makhani, raitas, desserts and lassis — nothing with meat or egg."
+    },
+    "NON_VEG": {
+      "title": "Non-veg menu",
+      "kicker": "Chicken · Mutton · Egg",
+      "count_one": "{count} non-veg dish",
+      "count_other": "{count} non-veg dishes",
+      "note": "Chicken, mutton & egg + sides",
+      "description": "Hyderabadi chicken and mutton biryanis, egg biryanis, kebabs, curries and combos — with the raitas, desserts and drinks that go with them."
+    }
+  },
+  "cart": {
+    "metaTitle": "Your cart",
+    "title": "Your cart",
+    "emptyTitle": "Your cart is empty",
+    "emptyText": "Add a biryani or two from the menu to start your order.",
+    "emptyCta": "Explore Menu",
+    "otherRestaurant": "This cart belongs to a restaurant that is no longer on the menu.",
+    "less": "Remove one {name}",
+    "more": "Add one more {name}",
+    "quantityOf": "Quantity of {name}",
+    "remove": "Remove",
+    "removeAria": "Remove {name} from cart",
+    "clear": "Clear cart",
+    "clearTitle": "Clear your cart?",
+    "clearText": "All dishes will be removed from your cart.",
+    "clearConfirm": "Clear cart",
+    "cancel": "Keep my cart",
+    "cleared": "Cart cleared",
+    "each": "{price} each",
+    "unavailable": "No longer available — please remove it to continue.",
+    "repriced": "Price updated to the current menu price.",
+    "summary": "Order summary",
+    "itemTotal": "Item total",
+    "estimatedTotal": "Estimated total",
+    "estimateNote": "The restaurant confirms the final prices when you place your order.",
+    "checkout": "Proceed to checkout",
+    "removeUnavailable": "Remove unavailable dishes to continue.",
+    "continueShopping": "Continue browsing",
+    "items_one": "{count} item",
+    "items_other": "{count} items"
+  },
+  "checkout": {
+    "metaTitle": "Checkout",
+    "title": "Checkout",
+    "reviewTitle": "Review your order",
+    "editCart": "Edit cart",
+    "fulfilmentTitle": "How would you like to get your order?",
+    "pickupTitle": "Pickup",
+    "pickupText": "Collect your order at the ZAYORA counter.",
+    "deliveryNote": "Delivery isn't available yet.",
+    "paymentTitle": "Payment",
+    "paymentText": "Online payment isn't available yet. Your order is saved as “Pending payment”.",
+    "place": "Place pickup order · {total}",
+    "placing": "Placing your order…",
+    "emptyTitle": "Nothing to check out",
+    "emptyText": "Your cart is empty.",
+    "fixCart": "Some dishes in your cart are no longer available.",
+    "reviewCart": "Review cart",
+    "orderingAs": "Ordering as {name}"
+  },
+  "auth": {
+    "requiredTitle": "Please log in",
+    "requiredText": "Log in to your ZAYORA account to continue. Browsing the menu doesn't need an account.",
+    "expiredTitle": "Your session has ended",
+    "expiredText": "For your security you were logged out. Log in again to continue — your cart is still here.",
+    "login": "Login",
+    "unavailableTitle": "Sign-in is unavailable",
+    "unavailableText": "We can't reach the sign-in service right now. Please try again in a moment.",
+    "switchAccount": "Log in with another account",
+    "customerOnlyTitle": "Ordering needs a customer account",
+    "customerOnlyText": "This account isn't a customer account, so it can't place orders. Log in as a customer to check out.",
+    "ownerOnlyTitle": "For restaurant owners",
+    "ownerOnlyText": "The kitchen dashboard is only for restaurant owner accounts.",
+    "adminOnlyTitle": "For platform administrators",
+    "adminOnlyText": "The admin dashboard is only for administrator accounts."
+  },
+  "orders": {
+    "metaTitle": "My orders",
+    "title": "My Orders",
+    "subtitle": "Your ZAYORA orders, newest first.",
+    "emptyTitle": "No orders yet",
+    "emptyText": "When you place an order it will appear here.",
+    "emptyCta": "Explore Menu",
+    "loading": "Loading your orders…",
+    "summary_one": "{count} item · {total}",
+    "summary_other": "{count} items · {total}",
+    "view": "View order"
+  },
+  "order": {
+    "metaTitle": "Order details",
+    "title": "Order details",
+    "placedTitle": "Thank you! Your order is placed.",
+    "placedText": "Show your order number at the ZAYORA counter when you collect it.",
+    "notFoundTitle": "Order not found",
+    "notFoundText": "We couldn't find this order in your account.",
+    "loading": "Loading your order…",
+    "orderNumber": "Order number",
+    "fullId": "Order ID",
+    "copy": "Copy order number",
+    "copied": "Order number copied",
+    "placedAt": "Placed on {date}",
+    "restaurant": "Restaurant",
+    "fulfilment": "Fulfilment",
+    "status": "Status",
+    "fulfilmentTypes": {
+      "PICKUP": "Pickup"
+    },
+    "statuses": {
+      "PENDING_PAYMENT": "Waiting for the restaurant",
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Rejected",
+      "PREPARING": "Preparing",
+      "READY_FOR_PICKUP": "Ready for pickup",
+      "PICKED_UP": "Picked up"
+    },
+    "paymentNote": "Nothing has been charged. Once the restaurant accepts your order, you pay at the counter.",
+    "items": "Items",
+    "colItem": "Dish",
+    "colQty": "Qty",
+    "colPrice": "Price",
+    "colAmount": "Amount",
+    "subtotal": "Item total",
+    "total": "Total",
+    "pricesNote": "Prices confirmed by the restaurant when the order was placed.",
+    "backToOrders": "All my orders",
+    "orderMore": "Order something else",
+    "tracker": {
+      "PENDING_PAYMENT": "Order placed",
+      "ACCEPTED": "Accepted",
+      "PREPARING": "Preparing",
+      "READY_FOR_PICKUP": "Ready for pickup",
+      "PICKED_UP": "Picked up"
+    },
+    "trackerLabel": "Order progress",
+    "rejectReasons": {
+      "SOLD_OUT": "An item in your order is sold out.",
+      "TOO_BUSY": "The kitchen is too busy right now.",
+      "CLOSING": "The kitchen is closing."
+    },
+    "rejectedTitle": "The restaurant couldn't accept this order",
+    "rejectedText": "Your order was not accepted. Nothing was charged.",
+    "payAtCounter": "Pay at the counter when you collect your order."
+  },
+  "story": {
+    "metaTitle": "Our story",
+    "eyebrow": "Our Story",
+    "title": "Where hunger meets flavours.",
+    "intro": "ZAYORA began with a simple belief: a great biryani is worth waiting for — but you shouldn't have to wait in line for it.",
+    "dumTitle": "The art of dum",
+    "dumText": "Every biryani is layered by hand — marinated meat or vegetables, long-grain basmati, saffron, mint and fried onions — then sealed in a handi and slow-cooked in its own steam until every grain carries the flavour.",
+    "spicesTitle": "Spices, ground with care",
+    "spicesText": "Our masalas are blended in small batches from whole spices, so each dish tastes the way it should: warm, layered and never one-note.",
+    "freshTitle": "Freshly prepared",
+    "freshText": "From the tandoor to the dessert counter, dishes are prepared through the day and packed hot for pickup.",
+    "promiseTitle": "Our promise",
+    "promiseText": "Honest prices confirmed live from our kitchen, clear vegetarian and non-vegetarian labels, and an order that's ready when you are.",
+    "cta": "Explore Our Menu",
+    "note": "ZAYORA is a portfolio project that demonstrates a full-stack ordering system."
+  },
+  "notFound": {
+    "metaTitle": "Page not found",
+    "title": "This page isn't on the menu",
+    "text": "The page you're looking for doesn't exist or has moved.",
+    "cta": "Back to home"
+  },
+  "footer": {
+    "explore": "Explore",
+    "account": "Your account",
+    "about": "ZAYORA is a portfolio project: a full-stack Indian food ordering system.",
+    "pickup": "Pickup only · Online payment coming soon",
+    "rights": "© {year} ZAYORA. All rights reserved."
+  },
+  "common": {
+    "retry": "Try again",
+    "dismiss": "Dismiss",
+    "loading": "Loading…"
+  },
+  "errors": {
+    "SIGN_IN_REQUIRED": "Please log in to continue.",
+    "NETWORK_ERROR": "Can't reach ZAYORA right now. Check your connection and try again.",
+    "VALIDATION_FAILED": "Some details in your order aren't valid.",
+    "MALFORMED_REQUEST": "Your order couldn't be read. Please refresh the page and try again.",
+    "INVALID_IDEMPOTENCY_KEY": "Your order couldn't be sent. Please refresh the page and try again.",
+    "ITEM_UNAVAILABLE": "A dish in your order is no longer available. Remove it and try again.",
+    "ITEM_NOT_IN_MENU": "A dish in your order is no longer on the menu. Remove it and try again.",
+    "DUPLICATE_ITEM": "The same dish appears twice in your order. Remove one and try again.",
+    "RESTAURANT_NOT_AVAILABLE": "ZAYORA isn't taking orders right now.",
+    "RESTAURANT_NOT_FOUND": "This restaurant doesn't exist or isn't taking orders right now.",
+    "AMOUNT_TOO_LARGE": "This order is too large. Reduce the quantities and try again.",
+    "EMPTY_ORDER": "Your cart is empty.",
+    "IDEMPOTENCY_KEY_REUSED": "Your cart changed while an earlier order was being processed. Please place the order again.",
+    "PRICING_UNAVAILABLE": "We couldn't confirm prices right now. No order was placed — please try again.",
+    "STORAGE_FAILED": "Your order couldn't be saved. No order was placed — please try again.",
+    "ORDER_NOT_FOUND": "Order not found.",
+    "NO_RESTAURANT": "ZAYORA isn't taking orders right now. Please check back soon.",
+    "status": {
+      "400": "The request was invalid.",
+      "401": "Your session has expired. Please log in again.",
+      "404": "Not found.",
+      "default": "Something went wrong (error {status}). Please try again.",
+      "403": "Your account isn't allowed to do this."
+    },
+    "unknown": "Something went wrong. Please try again.",
+    "FORBIDDEN": "Your account isn't allowed to do this.",
+    "OWNER_DATA_UNAVAILABLE": "Your restaurants couldn't be loaded right now. Please try again.",
+    "MENU_ITEM_NOT_FOUND": "This dish isn't on your menu.",
+    "NOTHING_TO_UPDATE": "Nothing was changed.",
+    "INVALID_TRANSITION": "This order can't move to that step from where it is now.",
+    "ORDER_CHANGED": "This order was updated in the meantime. The list now shows its current status.",
+    "INVALID_OWNER": "That account can't own a restaurant. Choose an enabled account with the restaurant owner role.",
+    "RESTAURANT_HAS_NO_MENU": "This restaurant needs at least one available dish before customers can see it.",
+    "RESTAURANT_CHANGED": "Someone else changed this restaurant in the meantime. Reload it and try again.",
+    "USER_DIRECTORY_UNAVAILABLE": "Accounts can't be loaded from the sign-in service right now. Please try again shortly.",
+    "INVALID_QUERY": "That filter isn't valid. Reset the filters and try again.",
+    "OWNER_USERNAME_TAKEN": "This username is already taken. Choose another one.",
+    "OWNER_EMAIL_TAKEN": "An account with this e-mail address already exists.",
+    "OWNER_PROVISIONING_UNAVAILABLE": "The account couldn't be created right now (or owner creation isn't set up). No account was created; please try again."
+  },
+  "kitchen": {
+    "metaTitle": "Kitchen dashboard",
+    "eyebrow": "Kitchen dashboard",
+    "title": "Kitchen",
+    "tabs": {
+      "menu": "Menu",
+      "orders": "Orders"
+    },
+    "inactive": "This restaurant is currently hidden from customers.",
+    "noRestaurantTitle": "No restaurant assigned yet",
+    "noRestaurantText": "Your account isn't linked to a restaurant. An administrator assigns restaurants to owners.",
+    "searchPlaceholder": "Find a dish…",
+    "soldOutOnly_one": "Only sold out ({count})",
+    "soldOutOnly_other": "Only sold out ({count})",
+    "available": "Available",
+    "soldOut": "Sold out",
+    "availableAria": "{name} available to order",
+    "edit": "Edit {name}",
+    "closeEditor": "Close editor for {name}",
+    "price": "Price (INR)",
+    "description": "Description",
+    "cancel": "Cancel",
+    "save": "Save changes",
+    "saved": "{name} updated",
+    "nowAvailable": "{name} is available again",
+    "nowSoldOut": "{name} marked as sold out",
+    "errors": {
+      "priceFormat": "Enter a price like 249 or 129.50.",
+      "priceDecimals": "Use at most two decimals.",
+      "pricePositive": "The price must be more than ₹0.",
+      "descriptionLength": "Keep the description under {max} characters."
+    },
+    "autoRefresh": "Updates every 20 seconds.",
+    "refresh": "Refresh",
+    "ordersToday": "Orders today",
+    "valueToday": "Value today",
+    "noOrdersTitle": "No orders yet",
+    "noOrdersText": "New orders for your restaurant will appear here.",
+    "waiting": "Waiting for you",
+    "payAtCounter": "Pay at counter",
+    "views": {
+      "active_one": "Active ({count})",
+      "active_other": "Active ({count})",
+      "history_one": "History ({count})",
+      "history_other": "History ({count})"
+    },
+    "noHistoryTitle": "No finished orders yet",
+    "noHistoryText": "Picked-up and rejected orders appear here.",
+    "actions": {
+      "accept": "Accept",
+      "reject": "Reject",
+      "PREPARING": "Start preparing",
+      "READY_FOR_PICKUP": "Mark ready",
+      "PICKED_UP": "Picked up"
+    },
+    "moved": {
+      "ACCEPTED": "Order {id} accepted",
+      "REJECTED": "Order {id} rejected",
+      "PREPARING": "Order {id} is being prepared",
+      "READY_FOR_PICKUP": "Order {id} is ready for pickup",
+      "PICKED_UP": "Order {id} picked up"
+    },
+    "rejectedBecause": "Reason: {reason}",
+    "reject": {
+      "title": "Reject order {id}?",
+      "text": "The customer will see that the restaurant couldn't accept the order. This can't be undone.",
+      "reasonLabel": "Reason shown to the customer",
+      "noReason": "No reason",
+      "keep": "Keep order",
+      "confirm": "Reject order"
+    }
+  },
+  "admin": {
+    "eyebrow": "Platform admin",
+    "nav": {
+      "label": "Admin sections",
+      "dashboard": "Dashboard",
+      "restaurants": "Restaurants",
+      "orders": "Orders",
+      "owners": "Owners"
+    },
+    "cards": {
+      "totalRestaurants": "Restaurants",
+      "activeRestaurants": "Active",
+      "inactiveRestaurants": "Inactive",
+      "totalOwners": "Restaurant owners",
+      "totalCustomers": "Customers",
+      "totalOrders": "Orders",
+      "ordersToday": "Orders today"
+    },
+    "dashboard": {
+      "metaTitle": "Admin dashboard",
+      "title": "Dashboard",
+      "recentOrders": "Recent orders",
+      "allOrders": "All orders",
+      "byStatus": "Orders by status",
+      "activity": "Restaurant activity",
+      "noActivity": "No orders have been placed yet.",
+      "value": "Order value {total} in total, {today} today (rejected orders excluded)",
+      "timeZone": "Today = {zone}",
+      "directoryUnavailable": "Owner and customer counts are unavailable: the sign-in service can't be asked right now."
+    },
+    "restaurants": {
+      "metaTitle": "Restaurants · Admin",
+      "title": "Restaurants",
+      "new": "New restaurant",
+      "search": "Search restaurants by name…",
+      "filter": "Filter restaurants",
+      "filters": {
+        "all": "All",
+        "active": "Active",
+        "inactive": "Inactive"
+      },
+      "emptyTitle": "No restaurants found",
+      "emptyText": "Try another search or filter, or create a restaurant."
+    },
+    "restaurant": {
+      "title": "Restaurant",
+      "newTitle": "New restaurant",
+      "newHint": "New restaurants start inactive. Assign an owner and make sure the menu has an available dish, then activate it.",
+      "create": "Create restaurant",
+      "created": "{name} created. Assign an owner next.",
+      "saved": "{name} saved.",
+      "details": "Details",
+      "back": "All restaurants",
+      "notFoundTitle": "Restaurant not found",
+      "notFoundText": "This restaurant doesn't exist.",
+      "active": "Active",
+      "inactive": "Inactive",
+      "visibility": "Visibility",
+      "activeText": "Customers can see this restaurant and order from it.",
+      "inactiveText": "Customers can't see this restaurant or order from it. Its menu, orders and owner are kept.",
+      "noMenuHint": "It has no available dish yet, so it cannot be activated.",
+      "activate": "Activate restaurant",
+      "deactivate": "Deactivate",
+      "activated": "{name} is now active.",
+      "deactivated": "{name} is now inactive.",
+      "confirmTitle": "Deactivate {name}?",
+      "confirmText": "Customers will stop seeing it and can't place new orders. Nothing is deleted: its menu, past orders and owner stay, and you can activate it again."
+    },
+    "owner": {
+      "title": "Owner",
+      "none": "No owner",
+      "noneText": "No owner is assigned yet.",
+      "current": "Managed by {owner}.",
+      "needsReassignment": "{owner} was linked by username before account-based ownership. Assign the owner again so they can manage it.",
+      "needsReassignmentShort": "Re-assign",
+      "choose": "Restaurant owner account",
+      "placeholder": "Choose an owner…",
+      "assign": "Assign owner",
+      "reassign": "Change owner",
+      "assigned": "{owner} now manages {name}.",
+      "noAccounts": "No enabled accounts have the restaurant owner role yet.",
+      "roleHint": "Only accounts with the restaurant owner role in Keycloak are listed. Roles are granted in the Keycloak admin console, never here."
+    },
+    "orders": {
+      "metaTitle": "Orders · Admin",
+      "title": "Orders",
+      "allRestaurants": "All restaurants",
+      "allStatuses": "All statuses",
+      "count_one": "{count} order",
+      "count_other": "{count} orders",
+      "emptyTitle": "No orders found",
+      "emptyText": "No orders match these filters yet."
+    },
+    "table": {
+      "restaurant": "Restaurant",
+      "status": "Status",
+      "owner": "Owner",
+      "dishes": "Dishes",
+      "dishCount": "{available} of {total} available",
+      "orders": "Orders",
+      "today": "Today",
+      "lastOrder": "Last order",
+      "order": "Order",
+      "items": "Items",
+      "total": "Total",
+      "placed": "Placed"
+    },
+    "form": {
+      "name": "Name",
+      "description": "Description",
+      "address": "Address",
+      "city": "City",
+      "phone": "Phone",
+      "errors": {
+        "nameRequired": "Enter a name.",
+        "tooLong": "Use at most {max} characters.",
+        "phone": "Use 6–20 digits, spaces or + - ( )."
+      }
+    },
+    "pagination": {
+      "label": "Pages",
+      "previous": "Previous",
+      "next": "Next",
+      "status": "Page {page} of {total}"
+    },
+    "owners": {
+      "metaTitle": "Owners · Admin",
+      "title": "Restaurant owners",
+      "management": "Owner management",
+      "manage": "Manage owners",
+      "create": "Create owner",
+      "back": "All owners",
+      "restaurants": "Restaurants",
+      "notAssigned": "Not assigned",
+      "emptyTitle": "No owner accounts yet",
+      "emptyText": "Create an owner account, then assign it to a restaurant.",
+      "total_one": "{count} owner account in total",
+      "total_other": "{count} owner accounts in total",
+      "status": {
+        "active": "Active",
+        "disabled": "Disabled",
+        "passwordPending": "Must change password"
+      }
+    },
+    "ownerForm": {
+      "title": "Create owner",
+      "intro": "Creates a restaurant owner account in the sign-in service. The owner logs in with the temporary password and must choose a new one straight away.",
+      "fullName": "Full name",
+      "email": "Email",
+      "username": "Username",
+      "temporaryPassword": "Temporary password",
+      "usernameHint": "3–50 lower-case letters, digits, dots, hyphens or underscores. Used to log in.",
+      "passwordHint": "10–64 characters, not containing the username. Share it with the owner securely; they must change it at first login.",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
+      "restaurant": "Assign to restaurant (optional)",
+      "assignLater": "Assign later",
+      "replaces": "replaces {owner}",
+      "notConfigured": "Owner creation isn't set up on the server (no provisioning client secret). You can still assign existing owner accounts.",
+      "created": "Owner account {username} created.",
+      "createdTitle": "{username} created",
+      "createdText": "{name} ({email}) can now log in as a restaurant owner.",
+      "sharePassword": "Give the temporary password to the owner through a secure channel. It is not shown again, and they must replace it at first login.",
+      "assignedTo": "Assigned to {name}: the owner sees it in the Kitchen after logging in.",
+      "notAssignedYet": "No restaurant assigned yet. Assign one from the restaurant page whenever you are ready.",
+      "assignFailed": "The account was created, but assigning {name} failed.",
+      "retryAssign": "Try the assignment again",
+      "openRestaurant": "Open restaurant",
+      "createAnother": "Create another owner",
+      "errors": {
+        "fullNameRequired": "Enter the full name.",
+        "emailRequired": "Enter an e-mail address.",
+        "email": "Enter a valid e-mail address.",
+        "usernameRequired": "Choose a username.",
+        "username": "Use 3–50 lower-case letters, digits, dots, hyphens or underscores, starting with a letter or digit.",
+        "passwordRequired": "Enter a temporary password.",
+        "passwordLength": "Use 10–64 characters.",
+        "passwordUsername": "The password mustn't contain the username."
+      }
+    }
+  }
+}
