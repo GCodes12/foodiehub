@@ -18,6 +18,8 @@
 .env
 .env.*
 !.env.example
+# Public production build settings for the web app (no secrets; see the file).
+!frontend/.env.prod
 *.pem
 *.key
 *.p12

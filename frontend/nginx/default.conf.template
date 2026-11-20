@@ -1,5 +1,16 @@
 # ZAYORA web app (Phase 3). Rendered at container start by the nginx image: ${GATEWAY_URL} is replaced from the
 # environment; nginx's own variables ($uri, $host, ...) are left alone.
+
+# Behind a TLS proxy (Caddy in production) keep its X-Forwarded-Proto/-Host; without one (local stack) use our own.
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    ""      $scheme;
+}
+map $http_x_forwarded_host $forwarded_host {
+    default $http_x_forwarded_host;
+    ""      $http_host;
+}
+
 server {
     listen 8080;
     server_name _;
@@ -23,7 +34,8 @@ server {
         proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
+        proxy_set_header X-Forwarded-Host $forwarded_host;
     }
 
     # Vite's fingerprinted files never change under the same name: cache them for a year.
