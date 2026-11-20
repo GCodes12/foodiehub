@@ -23,6 +23,13 @@
 *.p12
 *.jks
 *.keystore
+secrets.json
+credentials.json
+
+# --- Local data ---
+*.sqlite
+*.db
+mysql-data/
 
 # --- Java / Maven ---
 target/
