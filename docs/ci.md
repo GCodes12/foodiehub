@@ -1,7 +1,8 @@
 # Continuous integration (local Jenkins + SonarQube)
 
-> Status: written 2026-11-19 for DEC-020. Describes the **local** CI setup on one developer machine (MacBook Air M2,
-> Apple silicon, 8 GB RAM). It is not a production CI service; see [§10 Limits](#10-limits-and-what-this-is-not).
+> Status: written 2026-11-19 for DEC-020; revised 2026-11-20 (Quality Gate checked by the scanners, no webhook).
+> Describes the **local** CI setup on one developer machine (MacBook Air M2, Apple silicon, 8 GB RAM). It is not a
+> production CI service; see [§10 Limits](#10-limits-and-what-this-is-not).
 
 ZAYORA's pipeline is the [`Jenkinsfile`](../Jenkinsfile) at the repository root. It runs on a native Jenkins on the
 host and uses a SonarQube that runs in Docker from [`infra/sonarqube/compose.yaml`](../infra/sonarqube/compose.yaml).
@@ -86,7 +87,7 @@ of the memory plan, and the `Jenkinsfile` also sets `disableConcurrentBuilds()`.
 | Pipeline (`workflow-aggregator`) | Declarative `Jenkinsfile` |
 | Git (`git`) | Checking out the repository |
 | Credentials Binding (`credentials-binding`) | Secret text credentials |
-| SonarQube Scanner (`sonar`) | `withSonarQubeEnv`, `waitForQualityGate`, the webhook endpoint |
+| SonarQube Scanner (`sonar`) | `withSonarQubeEnv` (server URL and token for the scanners). The Quality Gate is checked by the scanners themselves (§5.3) |
 | JUnit (`junit`) | Backend (Surefire) and frontend (Node test runner) test reports |
 | Timestamper (`timestamper`) | `timestamps()` |
 | Workspace Cleanup (`ws-cleanup`) | `cleanWs` in `post { cleanup }` |
@@ -141,8 +142,11 @@ Never put it on a command line, in `sonar-project.properties`, in a POM or in th
 
 | ID | Kind | Value |
 |---|---|---|
-| `sonarqube-token` | Secret text | The SonarQube analysis token |
-| `sonarqube-webhook-secret` | Secret text | A long random string. The same value goes into the SonarQube webhook (§5.3) |
+| `sonarqube-token` | Secret text | The SonarQube analysis token. **Required:** both scanners use it to send the analysis and to read the Quality Gate result |
+
+No other credential is needed. An earlier draft of this setup also used a `sonarqube-webhook-secret` credential. It is
+**no longer required** (§5.3). If you already created it, it's unused and can be deleted by hand under **Manage
+Jenkins → Credentials** whenever convenient. Nothing in the pipeline refers to it.
 
 ### 5.2 SonarQube server (Manage Jenkins → System → SonarQube servers)
 
@@ -150,27 +154,33 @@ Never put it on a command line, in `sonar-project.properties`, in a POM or in th
 - **Name:** `sonarqube-local`. The `Jenkinsfile` refers to this exact name.
 - **Server URL:** `http://localhost:9000`
 - **Server authentication token:** `sonarqube-token`
-- **Advanced → Webhook Secret:** `sonarqube-webhook-secret`
+- Leave **Advanced → Webhook Secret** empty.
 
 `withSonarQubeEnv('sonarqube-local')` then provides `SONAR_HOST_URL` and `SONAR_AUTH_TOKEN` to the analysis steps. The
 `Jenkinsfile` passes the token to the scanners only as the environment variable `SONAR_TOKEN`, never as a `-D`
 argument, so it doesn't appear in process lists. Jenkins masks it in the console log.
 
-### 5.3 Webhook (SonarQube → Jenkins)
+### 5.3 Quality Gate check (scanner polling, no webhook)
 
-`waitForQualityGate` doesn't poll. It waits for SonarQube to call Jenkins back when the background analysis task
-finishes. In SonarQube, go to **Administration → Configuration → Webhooks → Create**:
+Each scanner checks its own project's Quality Gate. Both scanner commands pass:
 
-- **Name:** `jenkins-local`
-- **URL:** `http://host.docker.internal:8088/sonarqube-webhook/` (the trailing slash matters)
-- **Secret:** the same value as the Jenkins credential `sonarqube-webhook-secret`
+- `-Dsonar.qualitygate.wait=true`: after uploading the analysis, the scanner keeps asking SonarQube (with the same
+  token) until the background analysis task is processed, then reads the gate status.
+- `-Dsonar.qualitygate.timeout=600`: it waits at most **600 seconds** (10 minutes).
 
-SonarQube runs in a container, so `localhost` there is the container itself. Docker Desktop resolves
-`host.docker.internal` to the Mac. It was verified on 2026-11-19 that this container reaches a host service bound to
-`127.0.0.1:8088`, so Jenkins can stay on localhost.
+The scanner exits non-zero, which fails its Jenkins stage and the build, when:
 
-If the webhook is missing or wrong, the Quality Gate stages wait until their 10-minute timeout and then fail. Check
-the webhook's **Recent deliveries** in SonarQube.
+- the gate **fails**,
+- the gate isn't computed within 600 seconds, or
+- the analysis task fails in SonarQube.
+
+A passing gate lets the stage succeed. The log shows the gate status and a link to the project dashboard.
+
+**No SonarQube webhook is used, and none should be created.** Jenkins' webhook-based `waitForQualityGate` would need
+SonarQube to call `http://host.docker.internal:8088/…`. Inside the container, Docker Desktop resolves that name to a
+private address, and SonarQube 26.11 rejects webhooks to loopback, private, link-local and similar addresses. The only
+way around that is the global switch `sonar.validateWebhooks`, which turns this SSRF protection off for every webhook
+(there is no allowlist). It stays **enabled** (the default); see DEC-020.
 
 ## 6. The pipeline job
 
@@ -202,12 +212,10 @@ The order is chosen so that SonarQube and the test containers never run at the s
 | 7 | Frontend: tests and coverage | `npm run test:ci` (Node test runner: lcov + JUnit) | A test fails |
 | 8 | Frontend: build | `npm run build` | Build fails |
 | 9 | SonarQube: start | `docker compose … up -d --wait --wait-timeout 420 sonarqube` | SonarQube isn't healthy within 7 minutes |
-| 10 | SonarQube: backend analysis | Maven scanner (§4) | Scanner error |
-| 11 | Quality Gate: backend | `waitForQualityGate abortPipeline: true`, 10-minute timeout | Gate **failed**, or no webhook arrives in time |
-| 12 | SonarQube: frontend analysis | `npx --no-install sonar-scanner-npm` in `frontend/` | Scanner error |
-| 13 | Quality Gate: frontend | As 11 | As 11 |
-| 14 | SonarQube: stop | `docker compose … stop sonarqube` | Docker itself fails |
-| 15 | Docker images | `docker build` per `services/*/Dockerfile` and `frontend/Dockerfile`, tagged `zayora/<name>:<short-sha>` | **Skipped** until phase 3 adds Dockerfiles. Runs only after every check passed |
+| 10 | SonarQube: backend analysis and Quality Gate | Maven scanner (§4) with `sonar.qualitygate.wait=true`, `sonar.qualitygate.timeout=600` (§5.3) | Scanner error, `zayora-backend` gate **failed**, or no gate result within 600 s |
+| 11 | SonarQube: frontend analysis and Quality Gate | `npx --no-install sonar-scanner-npm` in `frontend/`, same two properties | Scanner error, `zayora-frontend` gate **failed**, or no gate result within 600 s |
+| 12 | SonarQube: stop | `docker compose … stop sonarqube` | Docker itself fails |
+| 13 | Docker images | `docker build` per `services/*/Dockerfile` and `frontend/Dockerfile`, tagged `zayora/<name>:<short-sha>` | **Skipped** until phase 3 adds Dockerfiles. Runs only after every check passed |
 
 The JUnit reports of stages 3 and 7 are published even when tests fail, and the backend JaCoCo HTML reports are
 archived with the build.
@@ -216,8 +224,8 @@ archived with the build.
 that service, through its own compose file), and leftover Testcontainers containers are removed. Then
 `post { cleanup }` wipes the workspace.
 
-The whole build has a 60-minute timeout. A Quality Gate failure stops the pipeline at that gate, so later stages (the
-frontend analysis after a failed backend gate, and Docker images) don't run.
+The whole build has a 60-minute timeout. A Quality Gate failure stops the pipeline at that analysis stage, so later
+stages (the frontend analysis after a failed backend gate, and Docker images) don't run.
 
 ## 8. Starting and stopping everything
 
@@ -231,7 +239,7 @@ Notes:
 - During a pipeline run you don't need to start or stop SonarQube yourself. The pipeline stops it before the tests,
   starts it for the analysis and stops it again afterwards. Start it by hand only to look at results in the UI
   (<http://localhost:9000>), and stop it when you're done.
-- Use `stop`, not `down -v`. `down -v` deletes the volumes and with them every analysis, token, gate and webhook.
+- Use `stop`, not `down -v`. `down -v` deletes the volumes and with them every analysis, token and gate.
 - Docker Desktop must be running for both the tests and SonarQube. On this machine it has stopped itself between runs
   before; Preflight catches that.
 

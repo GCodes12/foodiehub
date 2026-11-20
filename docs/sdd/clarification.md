@@ -624,10 +624,16 @@ VM, so the CI setup is chosen for low memory first. The owner approved:
    and in `post { always }`. Every stop uses `stop`, never `down`, so data volumes are kept.
 5. **Two projects:** `zayora-backend` (Maven scanner, JaCoCo coverage) and `zayora-frontend` (`@sonar/scan`, lcov
    coverage from the Node test runner).
-6. **Quality Gate:** a gate that fails is a failed build (`waitForQualityGate abortPipeline: true`). The result comes
-   back through a SonarQube webhook to Jenkins (`http://host.docker.internal:8088/sonarqube-webhook/`), which is
-   protected with a shared secret. The built-in *Sonar way* gate is not modified. The project gate was created and
-   assigned by the owner (P2.2). New code is measured against the first analysis (*Previous version*).
+6. **Quality Gate:** a gate that fails is a failed build. *Revised 2026-11-20:* each scanner checks its own project's
+   gate (`-Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=600`). It polls SonarQube with the analysis
+   token and exits non-zero when the gate fails, when the gate isn't computed within 600 seconds, or when the analysis
+   task fails. The webhook-based `waitForQualityGate` originally planned was dropped. SonarQube 26.11 rejects the
+   webhook URL `http://host.docker.internal:8088/…`, because Docker Desktop resolves that name to a private address.
+   Allowing it would mean turning off `sonar.validateWebhooks`, a global switch with no allowlist that disables
+   SonarQube's SSRF protection for all webhooks. The owner decided to keep `sonar.validateWebhooks` **enabled** and to
+   configure no webhook. Only the `sonarqube-token` credential is needed; the planned `sonarqube-webhook-secret` is
+   obsolete. The built-in *Sonar way* gate is not modified. The project gate was created and assigned by the owner
+   (P2.2). New code is measured against the first analysis (*Previous version*).
 7. **Baseline first:** the backend's three CSRF findings were reviewed as false positives with written reasons (the
    APIs are stateless bearer-token APIs, and a test per service proves cookies never authenticate). The eight frontend
    findings were fixed, not suppressed.

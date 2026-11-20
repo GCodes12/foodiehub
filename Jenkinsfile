@@ -6,7 +6,7 @@
 // No stage runs SonarQube and the test containers at the same time.
 //
 // Fails on: compilation or test failure, skipped backend tests (Docker missing), type errors, frontend test or build
-// failure, scanner failure, or a failed Quality Gate.
+// failure, scanner failure, or a failed Quality Gate (checked by the scanners themselves; no webhook).
 //
 // Jenkins setup (docs/ci.md): SonarQube server named 'sonarqube-local' (token stored as a Jenkins credential), the
 // SonarQube Scanner, Pipeline, JUnit, Timestamper and Workspace Cleanup plugins, and docker, java 21 and node on PATH.
@@ -134,7 +134,12 @@ pipeline {
             }
         }
 
-        stage('SonarQube: backend analysis') {
+        // Quality Gates (DEC-020): each scanner waits for its own project's gate (sonar.qualitygate.wait) and exits
+        // non-zero when the gate fails or is not computed within 600 s, which fails the stage and the build. No
+        // SonarQube webhook is involved: SonarQube blocks webhooks to private addresses such as host.docker.internal,
+        // and sonar.validateWebhooks stays enabled.
+
+        stage('SonarQube: backend analysis and Quality Gate') {
             steps {
                 withSonarQubeEnv('sonarqube-local') {
                     // The token reaches the scanner through the environment only (never on the command line).
@@ -143,34 +148,25 @@ pipeline {
                           org.sonarsource.scanner.maven:sonar-maven-plugin:5.9.0.7382:sonar \
                           -Dsonar.host.url="$SONAR_HOST_URL" \
                           -Dsonar.projectKey=zayora-backend \
-                          -Dsonar.projectName="ZAYORA backend"
+                          -Dsonar.projectName="ZAYORA backend" \
+                          -Dsonar.qualitygate.wait=true \
+                          -Dsonar.qualitygate.timeout=600
                     '''
                 }
             }
         }
 
-        stage('Quality Gate: backend') {
-            steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
-                }
-            }
-        }
-
-        stage('SonarQube: frontend analysis') {
+        stage('SonarQube: frontend analysis and Quality Gate') {
             steps {
                 withSonarQubeEnv('sonarqube-local') {
                     dir('frontend') {
-                        sh 'SONAR_TOKEN="$SONAR_AUTH_TOKEN" npx --no-install sonar-scanner-npm -Dsonar.host.url="$SONAR_HOST_URL"'
+                        sh '''
+                            SONAR_TOKEN="$SONAR_AUTH_TOKEN" npx --no-install sonar-scanner-npm \
+                              -Dsonar.host.url="$SONAR_HOST_URL" \
+                              -Dsonar.qualitygate.wait=true \
+                              -Dsonar.qualitygate.timeout=600
+                        '''
                     }
-                }
-            }
-        }
-
-        stage('Quality Gate: frontend') {
-            steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
                 }
             }
         }
